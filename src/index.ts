@@ -3,8 +3,6 @@ import { eq } from 'drizzle-orm'
 import { usersTable } from './db/schema'
 import express, { NextFunction, Request, Response } from 'express'
 import config from './config'
-import { Type } from '@sinclair/typebox'
-import { TypeCompiler } from '@sinclair/typebox/compiler'
 import { db } from './db'
 import bcrypt from 'bcrypt'
 import { cache, connRedis } from './db/redis'
@@ -12,7 +10,7 @@ import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-import { AppRouter } from './route.custom'
+import { AppRouter, Type } from './route.custom'
 
 const route = new AppRouter()
 

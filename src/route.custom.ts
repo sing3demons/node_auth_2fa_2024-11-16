@@ -1,13 +1,13 @@
 import { Static, TSchema, Type } from '@sinclair/typebox'
-import { TypeCompiler } from '@sinclair/typebox/compiler'
-import express, {
-  type Express,
+import { TypeCompiler, ValueErrorIterator } from '@sinclair/typebox/compiler'
+import {
   type Request,
   type Response,
   type NextFunction,
   type RequestHandler,
   Router,
 } from 'express'
+import { ValueError } from '@sinclair/typebox/value'
 
 type ExtractParams<T extends string> =
   T extends `${infer _Start}:${infer Param}/${infer Rest}`
@@ -155,50 +155,30 @@ class BaseRoute {
     if (schemas?.params) {
       const result = TypeCompiler.Compile(schemas.params)
       if (!result.Check(req.params)) {
-        const value = [...result.Errors(req.params)].map(
-          ({ path, message }) => ({ path, message })
-        )
-        value.forEach((v) => {
-          if (valueErr.has(v.path)) {
-            valueErr.get(v.path)?.message.push(v.message)
-          } else {
-            valueErr.set(v.path, { path: v.path, message: [v.message] })
-          }
-        })
+        const first = result.Errors(req.params).First()
+        if (first) {
+          throw first
+        }
       }
     }
     if (schemas?.body) {
       const result = TypeCompiler.Compile(schemas.body)
       if (!result.Check(req.body)) {
-        const value = [...result.Errors(req.params)].map(
-          ({ path, message }) => ({ path, message })
-        )
-        value.forEach((v) => {
-          if (valueErr.has(v.path)) {
-            valueErr.get(v.path)?.message.push(v.message)
-          } else {
-            valueErr.set(v.path, { path: v.path, message: [v.message] })
-          }
-        })
+        const first = result.Errors(req.body).First()
+        if (first) {
+          throw first
+        }
       }
     }
     if (schemas?.query) {
       const result = TypeCompiler.Compile(schemas.query)
       if (!result.Check(req.query)) {
-        const value = [...result.Errors(req.params)].map(
-          ({ path, message }) => ({ path, message })
-        )
-        value.forEach((v) => {
-          if (valueErr.has(v.path)) {
-            valueErr.get(v.path)?.message.push(v.message)
-          } else {
-            valueErr.set(v.path, { path: v.path, message: [v.message] })
-          }
-        })
+        const first = result.Errors(req.query).First()
+        if (first) {
+          throw first
+        }
       }
     }
-
-    if (valueErr.size > 0) throw Array.from(valueErr.values())
   }
   private preRequest(handler: RouteHandler<any, any, any>) {
     return async (req: Request, res: Response, next: NextFunction) => {
@@ -219,17 +199,19 @@ class BaseRoute {
   }
 
   private handleError(error: unknown, res: Response, next: NextFunction) {
-    if (Array.isArray(error)) {
+    console.log('Error:', typeof error, error)
+    if (error instanceof Object) {
       // Assuming `error` is an array of manual validation error messages
+      const err = error as { path: string; message: string }
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        details: error.map((err: { path: string; message: string[] }) => ({
+        details: {
           name: err?.path.startsWith('/')
             ? err.path.replace('/', '')
             : err.path || 'unknown',
           message: err?.message || 'Unknown error',
-        })),
+        },
       })
     } else if (error instanceof Error) {
       // Handle general errors
@@ -297,4 +279,4 @@ class AppRouter extends BaseRoute {
   }
 }
 
-export { AppRouter }
+export { AppRouter, Type }
