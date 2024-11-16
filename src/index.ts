@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { eq } from 'drizzle-orm'
 import { usersTable } from './db/schema'
-import express, { NextFunction, Request, Response } from 'express'
+import { NextFunction, Request, Response } from 'express'
 import config from './config'
 import { db } from './db'
 import bcrypt from 'bcrypt'
@@ -10,7 +10,7 @@ import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-import { AppRouter, Type } from './route.custom'
+import AppServer, { AppRouter, Type } from './route.custom'
 
 const route = new AppRouter()
 
@@ -25,11 +25,9 @@ const loginSchema = Type.Object({
   password: Type.String(),
 })
 
-// const main = async () => {}
-connRedis()
-
-const app = express()
-app.use(express.json())
+const app = new AppServer(async () => {
+  await connRedis()
+})
 
 function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization']
@@ -55,10 +53,7 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
 route.post(
   '/api/auth/register',
   async ({ body: { name, email, password }, res }) => {
-    const checkUser = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
+    const checkUser = await db.select().from(usersTable).where(eq(usersTable.email, email))
 
     if (checkUser.length > 0) {
       console.log(checkUser)
@@ -87,10 +82,7 @@ route.post(
 route.post(
   '/api/auth/login',
   async ({ body: { email, password }, res }) => {
-    const users = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.email, email))
+    const users = await db.select().from(usersTable).where(eq(usersTable.email, email))
 
     if (users.length !== 1) {
       res.status(401).json({ message: 'Email or password is invalid' })
@@ -156,10 +148,7 @@ route.post(
       return
     }
 
-    const users = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, +userId))
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, +userId))
 
     if (users.length !== 1) {
       res.status(401).json({ message: 'Email or password is invalid' })
@@ -181,9 +170,7 @@ route.post(
     const verified = authenticator.check(totp, secret)
 
     if (!verified) {
-      res
-        .status(401)
-        .json({ message: 'The provided TOTP is incorrect or expired' })
+      res.status(401).json({ message: 'The provided TOTP is incorrect or expired' })
       return
     }
 
@@ -226,10 +213,7 @@ route.get(
       return
     }
 
-    const users = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, +id))
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, +id))
 
     if (users.length !== 1) {
       res.status(401).json({ message: 'Email or password is invalid' })
@@ -241,10 +225,7 @@ route.get(
     const secret = authenticator.generateSecret()
     const uri = authenticator.keyuri(user.email, 'manfra.io', secret)
 
-    const result = await db
-      .update(usersTable)
-      .set({ '2faSecret': secret, '2faEnable': true })
-      .where(eq(usersTable.id, +id))
+    const result = await db.update(usersTable).set({ '2faSecret': secret, '2faEnable': true }).where(eq(usersTable.id, +id))
     console.log(result)
     const qrCode = await QRCode.toBuffer(uri)
 
@@ -266,10 +247,7 @@ route.post(
         return
       }
 
-      const users = await db
-        .select()
-        .from(usersTable)
-        .where(eq(usersTable.id, +id))
+      const users = await db.select().from(usersTable).where(eq(usersTable.id, +id))
       if (users.length !== 1) {
         res.status(401).json({ message: 'User not found' })
         return
@@ -289,10 +267,7 @@ route.post(
         return
       }
 
-      await db
-        .update(usersTable)
-        .set({ '2faEnable': true })
-        .where(eq(usersTable.id, +id))
+      await db.update(usersTable).set({ '2faEnable': true }).where(eq(usersTable.id, +id))
 
       res.status(200).json({ message: 'TOTP validated successfully' })
     } catch (error) {
@@ -311,8 +286,4 @@ route.post(
   }
 )
 
-app.use(route.register())
-
-app.listen(config.get('port'), () => {
-  console.log(`Server is running on port ${config.get('port')}`)
-})
+app.router(route).listen(config.get('port'))

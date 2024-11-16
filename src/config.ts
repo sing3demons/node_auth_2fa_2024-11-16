@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 type IConfig = {
   [key: string]: any
-  port?: number
+  port: number
   app_name: string
   db: {
     url: string

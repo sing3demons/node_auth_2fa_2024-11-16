@@ -1,7 +1,9 @@
 import { Static, TSchema, Type } from '@sinclair/typebox'
 import { TypeCompiler } from '@sinclair/typebox/compiler'
-import { type Request, type Response, type NextFunction, type RequestHandler, Router } from 'express'
-import { ValueError } from '@sinclair/typebox/value'
+import express, { type Request, type Response, type NextFunction, type RequestHandler, Router, type Express } from 'express'
+import { v7 as uuid } from 'uuid'
+import http from 'http'
+import { Socket } from 'net'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -238,7 +240,7 @@ class AppRouter extends BaseRoute {
 
     return routeParamsSchema
   }
-  
+
   public register() {
     this.routes.forEach((route) => {
       const { path, handler, schemas, method } = route
@@ -259,4 +261,112 @@ class AppRouter extends BaseRoute {
   }
 }
 
+interface IServer {
+  router: (router: AppRouter, ...middleware: RequestHandler[]) => IServer
+  group: (path: string, router: AppRouter, ...middleware: RequestHandler[]) => IServer
+  use: (...handler: RequestHandler[]) => IServer
+  listen: (port: number | string, close?: () => Promise<void> | void) => void
+}
+
+function globalErrorHandler(error: unknown, _request: Request, res: Response, _next: NextFunction) {
+  let statusCode = 500
+  let message = 'An unknown error occurred'
+  if (error instanceof Error) {
+    message = error.message
+
+    if (message.includes('not found')) {
+      statusCode = 404
+    }
+  } else {
+    message = `An unknown error occurred, ${String(error)}`
+  }
+
+  const data = {
+    statusCode: statusCode,
+    message,
+    success: false,
+    data: null,
+    traceStack: process.env.NODE_ENV === 'development' && error instanceof Error ? error.stack : undefined,
+  }
+  res.status(statusCode).send(data)
+}
+
+const transaction = 'x-session-id'
+
+class AppServer implements IServer {
+  private readonly app: Express = express()
+  constructor(before?: () => void) {
+    if (before) {
+      before()
+    }
+    this.app.use((req: Request, _res: Response, next: NextFunction) => {
+      if (!req.headers[transaction]) {
+        req.headers[transaction] = uuid()
+      }
+      next()
+    })
+    this.app.use(express.json())
+    this.app.use(express.urlencoded({ extended: true }))
+  }
+
+  public group(path: string, router: AppRouter, ...middleware: RequestHandler[]) {
+    this.app.use(path, ...middleware, router.register())
+    return this
+  }
+
+  public router(router: AppRouter, ...middleware: RequestHandler[]) {
+    this.app.use(...middleware, router.register())
+
+    return this
+  }
+
+  public use(...middleware: RequestHandler[]) {
+    this.app.use(...middleware)
+    return this
+  }
+
+  public listen(port: number | string, close?: () => Promise<void> | void) {
+    this.app.use((req: Request, res: Response, _next: NextFunction) => {
+      res.status(404).json({ message: 'Unknown URL', path: req.originalUrl })
+    })
+    this.app.use(globalErrorHandler)
+
+    const server = http.createServer(this.app).listen(port, () => {
+      console.log(`Server listening on port ${port}`)
+    })
+
+    const connections = new Set<Socket>()
+
+    server.on('connection', (connection) => {
+      connections.add(connection)
+      connection.on('close', () => {
+        connections.delete(connection)
+      })
+    })
+
+    const signals = ['SIGINT', 'SIGTERM']
+    signals.forEach((signal) => {
+      process.on(signal, () => {
+        console.log(`Received ${signal}. Closing server.`)
+        server.close(() => {
+          console.log('Server closed.')
+          close?.()
+          process.exit(0)
+        })
+
+        // If after 10 seconds the server hasn't finished, force shutdown
+        setTimeout(() => {
+          console.log('Could not close server in time. Forcing shutdown.')
+          connections.forEach((connection) => {
+            connection.destroy()
+          })
+          close?.()
+          process.exit(1)
+        }, 10000)
+      })
+    })
+  }
+}
+
 export { AppRouter, Type }
+export default AppServer
