@@ -1,0 +1,56 @@
+@base_url=http://localhost:3000
+
+GET {{base_url}} HTTP/1.1
+
+
+### register
+POST {{base_url}}/api/auth/register HTTP/1.1
+Content-Type: application/json
+
+{
+    "name": "test",
+    "email": "test@test.com",
+    "password": "test"
+}
+
+### login
+# @name auth
+POST {{base_url}}/api/auth/login HTTP/1.1
+Content-Type: application/json
+
+{
+    "email": "test@test.com",
+    "password": "test"
+}
+
+###
+@accessToken = {{auth.response.body.$.access_token}}
+###
+@refreshToken = {{auth.response.body.$.refresh_token}}
+
+### /api/auth/2fa/generate
+GET {{base_url}}/api/auth/2fa/generate?id=1 HTTP/1.1
+Content-Type: application/json
+Authorization : {{accessToken}}
+
+### /api/auth/2fa/validate
+POST {{base_url}}/api/auth/2fa/validate HTTP/1.1
+Content-Type: application/json
+Authorization : {{accessToken}}
+
+{
+    "totp": "287287",
+    "id": "1"
+}
+ 
+
+
+### /api/auth/login/2fa
+POST {{base_url}}/api/auth/login/2fa HTTP/1.1
+Content-Type: application/json
+Authorization : {{accessToken}}
+
+{
+    "totp": "820904",
+    "tempToken": "3bb3c53e-67f7-496f-a104-315987bd73eb"
+}

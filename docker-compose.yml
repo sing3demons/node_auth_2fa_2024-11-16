@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:17.1-alpine3.20
+    restart: always
+    shm_size: 128mb
+    environment:
+      - POSTGRES_DB=auth
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=syspass
+    ports:
+      - 5432:5432
+  redis:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - 6379:6379
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
