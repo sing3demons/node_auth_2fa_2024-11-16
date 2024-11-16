@@ -12,12 +12,9 @@ import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
+import { AppRouter } from './route.custom'
 
-type User = {
-  password: string
-  name: string
-  email: string
-}
+const route = new AppRouter()
 
 const registerSchema = Type.Object({
   name: Type.String(),
@@ -57,21 +54,9 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
   return
 }
 
-app.post(
+route.post(
   '/api/auth/register',
-  async (req: Request<{}, User>, res: Response) => {
-    const { name, email, password } = req.body
-    const result = TypeCompiler.Compile(registerSchema)
-    if (!result.Check(req.body)) {
-      const value = [...result.Errors(req.body)].map(({ path, message }) => ({
-        path,
-        message,
-      }))
-
-      res.status(422).json(value)
-      return
-    }
-
+  async ({ body: { name, email, password }, res }) => {
     const checkUser = await db
       .select()
       .from(usersTable)
@@ -95,24 +80,15 @@ app.post(
     const user = await db.insert(usersTable).values(body)
 
     res.json(user)
+  },
+  {
+    body: registerSchema,
   }
 )
 
-app.post(
+route.post(
   '/api/auth/login',
-  async (req: Request<{}, Omit<User, 'name'>>, res: Response) => {
-    const { email, password } = req.body
-    const result = TypeCompiler.Compile(loginSchema)
-    if (!result.Check(req.body)) {
-      const value = [...result.Errors(req.body)].map(({ path, message }) => ({
-        path,
-        message,
-      }))
-
-      res.status(422).json(value)
-      return
-    }
-
+  async ({ body: { email, password }, res }) => {
     const users = await db
       .select()
       .from(usersTable)
@@ -165,19 +141,13 @@ app.post(
       access_token: accessToken,
       refresh_token: refreshToken,
     })
-  }
+  },
+  { body: loginSchema }
 )
 
-app.post('/api/auth/login/2fa', async (req: Request, res: Response) => {
-  try {
-    const { tempToken, totp } = req.body
-
-    if (!tempToken || !totp) {
-      res
-        .status(422)
-        .json({ message: 'Please fill in all fields (tempToken and totp)' })
-      return
-    }
+route.post(
+  '/api/auth/login/2fa',
+  async ({ body: { tempToken, totp }, res }) => {
     const key = `${config.get('cacheTemporaryTokenPrefix')}${tempToken}`
     const userId = await cache.get(key)
 
@@ -240,19 +210,18 @@ app.post('/api/auth/login/2fa', async (req: Request, res: Response) => {
       access_token: accessToken,
       refresh_token: refreshToken,
     })
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(500).json({ message: error.message })
-      return
-    }
-    res.status(500).json({ message: 'Internal Server Error' })
+  },
+  {
+    body: Type.Object({
+      tempToken: Type.String(),
+      totp: Type.String(),
+    }),
   }
-})
+)
 
-app.get(
+route.get(
   '/api/auth/2fa/generate',
-  authMiddleware,
-  async (req: Request, res: Response) => {
+  async ({ res, req }) => {
     const id = req.userId
     if (!id) {
       res.status(422).json({ message: 'Please provide the user id' })
@@ -283,19 +252,19 @@ app.get(
 
     res.setHeader('Content-Disposition', 'attachment; filename=qrcode.png')
     res.status(200).type('image/png').send(qrCode)
+  },
+  {
+    middleware: authMiddleware,
   }
 )
 
-app.post(
+route.post(
   '/api/auth/2fa/validate',
-  authMiddleware,
-  async (req: Request, res: Response) => {
+  async ({ req, res, body: { totp } }) => {
     try {
       const id = req.userId
-      const { totp } = req.body
-
-      if (!totp || !id) {
-        res.status(422).json({ message: 'TOTP is required' })
+      if (!id) {
+        res.status(422).json({ message: 'Please provide the user id' })
         return
       }
 
@@ -335,8 +304,16 @@ app.post(
       }
       res.status(500).json({ message: 'Internal Server Error' })
     }
+  },
+  {
+    middleware: authMiddleware,
+    body: Type.Object({
+      totp: Type.String(),
+    }),
   }
 )
+
+app.use(route.register())
 
 app.listen(config.get('port'), () => {
   console.log(`Server is running on port ${config.get('port')}`)
