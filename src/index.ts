@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { eq } from 'drizzle-orm'
 import { usersTable } from './db/schema'
-import express, { Request, Response } from 'express'
+import express, { NextFunction, Request, Response } from 'express'
 import config from './config'
 import { Type } from '@sinclair/typebox'
 import { TypeCompiler } from '@sinclair/typebox/compiler'
@@ -35,6 +35,27 @@ connRedis()
 
 const app = express()
 app.use(express.json())
+
+function authMiddleware(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+
+  if (!token) {
+    res.status(401).json({ message: 'Access token is required' })
+    return
+  }
+
+  jwt.verify(token, config.get('accessTokenSecret'), (err, user) => {
+    if (err) {
+      return res.status(403).json({ message: 'Invalid token' })
+    }
+    const u = user as { id: number; email: string }
+    req.userId = u.id
+    next()
+  })
+  res.status(403).json({ message: 'Invalid token' })
+  return
+}
 
 app.post(
   '/api/auth/register',
@@ -228,77 +249,94 @@ app.post('/api/auth/login/2fa', async (req: Request, res: Response) => {
   }
 })
 
-app.get('/api/auth/2fa/generate', async (req: Request, res: Response) => {
-  const id = req.query.id as string
-  if (!id) {
-    res.status(422).json({ message: 'Please provide the user id' })
-    return
-  }
-
-  const users = await db.select().from(usersTable).where(eq(usersTable.id, +id))
-
-  if (users.length !== 1) {
-    res.status(401).json({ message: 'Email or password is invalid' })
-    return
-  }
-
-  const user = users[0]
-
-  const secret = authenticator.generateSecret()
-  const uri = authenticator.keyuri(user.email, 'manfra.io', secret)
-
-  const result = await db
-    .update(usersTable)
-    .set({ '2faSecret': secret, '2faEnable': true })
-    .where(eq(usersTable.id, +id))
-  console.log(result)
-  const qrCode = await QRCode.toBuffer(uri)
-
-  res.setHeader('Content-Disposition', 'attachment; filename=qrcode.png')
-  res.status(200).type('image/png').send(qrCode)
-})
-
-app.post('/api/auth/2fa/validate',  async (req: Request, res: Response) => {
-    try {
-        const { totp, id } = req.body
-
-        if (!totp || !id) {
-             res.status(422).json({ message: 'TOTP is required' })
-             return
-        }
-
-        const users = await db.select().from(usersTable).where(eq(usersTable.id, +id))
-        if (users.length !== 1) {
-            res.status(401).json({ message: 'User not found' })
-            return
-        }
-        const user = users[0]
-
-        const secret = user['2faSecret']
-        if (!secret) {
-            res.status(401).json({ message: '2FA secret is not set for this user' })
-            return
-        }
-
-        const verified = authenticator.check(totp, secret)
-
-        if (!verified) {
-             res.status(400).json({ message: 'TOTP is not correct or expired' })
-             return
-        }
-
-        await db.update(usersTable).set({ '2faEnable': true }).where(eq(usersTable.id, +id))
-       
-
-         res.status(200).json({ message: 'TOTP validated successfully' })
-    } catch (error) {
-        if (error instanceof Error) {
-            res.status(500).json({ message: error.message })
-            return
-        }
-        res.status(500).json({ message: 'Internal Server Error' })
+app.get(
+  '/api/auth/2fa/generate',
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    const id = req.userId
+    if (!id) {
+      res.status(422).json({ message: 'Please provide the user id' })
+      return
     }
-})
+
+    const users = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, +id))
+
+    if (users.length !== 1) {
+      res.status(401).json({ message: 'Email or password is invalid' })
+      return
+    }
+
+    const user = users[0]
+
+    const secret = authenticator.generateSecret()
+    const uri = authenticator.keyuri(user.email, 'manfra.io', secret)
+
+    const result = await db
+      .update(usersTable)
+      .set({ '2faSecret': secret, '2faEnable': true })
+      .where(eq(usersTable.id, +id))
+    console.log(result)
+    const qrCode = await QRCode.toBuffer(uri)
+
+    res.setHeader('Content-Disposition', 'attachment; filename=qrcode.png')
+    res.status(200).type('image/png').send(qrCode)
+  }
+)
+
+app.post(
+  '/api/auth/2fa/validate',
+  authMiddleware,
+  async (req: Request, res: Response) => {
+    try {
+      const id = req.userId
+      const { totp } = req.body
+
+      if (!totp || !id) {
+        res.status(422).json({ message: 'TOTP is required' })
+        return
+      }
+
+      const users = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.id, +id))
+      if (users.length !== 1) {
+        res.status(401).json({ message: 'User not found' })
+        return
+      }
+      const user = users[0]
+
+      const secret = user['2faSecret']
+      if (!secret) {
+        res.status(401).json({ message: '2FA secret is not set for this user' })
+        return
+      }
+
+      const verified = authenticator.check(totp, secret)
+
+      if (!verified) {
+        res.status(400).json({ message: 'TOTP is not correct or expired' })
+        return
+      }
+
+      await db
+        .update(usersTable)
+        .set({ '2faEnable': true })
+        .where(eq(usersTable.id, +id))
+
+      res.status(200).json({ message: 'TOTP validated successfully' })
+    } catch (error) {
+      if (error instanceof Error) {
+        res.status(500).json({ message: error.message })
+        return
+      }
+      res.status(500).json({ message: 'Internal Server Error' })
+    }
+  }
+)
 
 app.listen(config.get('port'), () => {
   console.log(`Server is running on port ${config.get('port')}`)
