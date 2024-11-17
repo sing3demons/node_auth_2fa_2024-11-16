@@ -130,3 +130,4 @@ dist
 .pnp.*
 dist
 drizzle
+package-lock.json

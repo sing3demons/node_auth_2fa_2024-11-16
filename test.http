@@ -29,18 +29,17 @@ Content-Type: application/json
 @refreshToken = {{auth.response.body.$.refresh_token}}
 
 ### /api/auth/2fa/generate
-GET {{base_url}}/api/auth/2fa/generate?id=1 HTTP/1.1
+GET {{base_url}}/api/auth/2fa/generate HTTP/1.1
 Content-Type: application/json
-Authorization : {{accessToken}}
+Authorization : bearer {{accessToken}}
 
 ### /api/auth/2fa/validate
 POST {{base_url}}/api/auth/2fa/validate HTTP/1.1
 Content-Type: application/json
-Authorization : {{accessToken}}
+Authorization :b {{accessToken}}
 
 {
-    "totp": "287287",
-    "id": "1"
+    "totp": "478794"
 }
  
 

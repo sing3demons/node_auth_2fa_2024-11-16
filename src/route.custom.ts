@@ -4,6 +4,7 @@ import express, { type Request, type Response, type NextFunction, type RequestHa
 import { v7 as uuid } from 'uuid'
 import http from 'http'
 import { Socket } from 'net'
+import { DetailLog, SummaryLog } from './logger/logger'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -175,23 +176,39 @@ class BaseRoute {
     }
   }
 
-  private handleError(error: unknown, res: Response, next: NextFunction) {
+  private handleError(error: unknown, req: Request, res: Response, next: NextFunction) {
+    const detailLog = req.detailLog
     if (error instanceof Object) {
       const err = error as { path: string; message: string }
       if (err.path && err.message) {
+        const details = {
+          name: err?.path.startsWith('/') ? err.path.replace('/', '') : err.path || 'unknown',
+          message: err?.message || 'Unknown error',
+        }
+
+        if (detailLog.startTimeDate) {
+          detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(details))
+          detailLog.end()
+        }
+
         res.status(400).json({
           success: false,
           message: 'Validation failed',
-          details: {
-            name: err?.path.startsWith('/') ? err.path.replace('/', '') : err.path || 'unknown',
-            message: err?.message || 'Unknown error',
-          },
+          details,
         })
       } else {
         const code = error as unknown as { statusCode?: number; status?: number }
+        if (detailLog.startTimeDate) {
+          detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(code))
+          detailLog.end()
+        }
         res.status(code.statusCode || code.status || 500).json(error)
       }
     } else if (error instanceof Error) {
+      if (detailLog.startTimeDate) {
+        detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(error))
+        detailLog.end()
+      }
       // Handle general errors
       res.status(500).json({
         success: false,
@@ -199,6 +216,10 @@ class BaseRoute {
         traceStack: error.stack,
       })
     } else {
+      if (detailLog.startTimeDate) {
+        detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(error))
+        detailLog.end()
+      }
       // Handle other errors
       res.status(500).json({
         success: false,
@@ -213,10 +234,14 @@ class BaseRoute {
   protected createHandler(handler: RouteHandler<any>, schemas?: SchemaT) {
     return async (req: Request, res: Response, next: NextFunction) => {
       try {
+        req.detailLog = new DetailLog(req.session || '')
+        req.summaryLog = new SummaryLog(req.session || '')
+
+        req.detailLog.addInputRequest('client', req.method, '', req)
         this.validateRequest(req, schemas)
         this.preRequest(handler)(req, res, next)
       } catch (error) {
-        this.handleError(error, res, next)
+        this.handleError(error, req, res, next)
       }
     }
   }

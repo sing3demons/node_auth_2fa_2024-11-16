@@ -11,6 +11,8 @@ import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
 import AppServer, { AppRouter, Type } from './route.custom'
+import { DetailLog, SummaryLog } from './logger/logger'
+import { RequestAttributes, requestHttp } from './http-service'
 
 const route = new AppRouter()
 
@@ -38,16 +40,14 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
     return
   }
 
-  jwt.verify(token, config.get('accessTokenSecret'), (err, user) => {
-    if (err) {
-      return res.status(403).json({ message: 'Invalid token' })
-    }
-    const u = user as { id: number; email: string }
-    req.userId = u.id
-    next()
-  })
-  res.status(403).json({ message: 'Invalid token' })
-  return
+  const user = jwt.verify(token, config.get('accessTokenSecret')) as { id: string; email: string } | null
+  if (!user) {
+    res.status(403).json({ message: 'Invalid token' })
+    return
+  }
+
+  req.userId = user.id
+  return next()
 }
 
 route.post(
@@ -81,10 +81,20 @@ route.post(
 
 route.post(
   '/api/auth/login',
-  async ({ body: { email, password }, res }) => {
+  async ({ body: { email, password }, res, req }) => {
+    const detailLog = req.detailLog.setIdentity('identity-1').setScenario('scenario-1').setCommand('get_login')
+    const summaryLog = new SummaryLog('session-1', 'init-invoke', 'scenario-1', 'identity-1')
+    summaryLog.addSuccessBlock('client', 'get_login', '2000', 'success')
+
+    const sql = db.select().from(usersTable).where(eq(usersTable.email, email)).toSQL()
+    detailLog.addOutputRequest('postgres', 'cmd-2', 'invoke-1', '', sql)
+    detailLog.end()
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email))
 
+    detailLog.addInputResponse('postgres', 'cmd-2', 'invoke-1', '', users)
+
     if (users.length !== 1) {
+      summaryLog.addErrorBlock('postgres', 'cmd-2', '40100', 'Email or password is invalid')
       res.status(401).json({ message: 'Email or password is invalid' })
       return
     }
@@ -92,8 +102,31 @@ route.post(
     const user = users[0]
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
+      summaryLog.addErrorBlock('postgres', 'cmd-2', '40100', 'Email or password is invalid')
       res.status(401).json({ message: 'Email or password is invalid' })
       return
+    }
+
+    summaryLog.addSuccessBlock('postgres', 'cmd-2', '2000', 'success')
+
+    const optionAttributes: RequestAttributes[] = []
+    for (let i = 1; i <= 30; i++) {
+      const option: RequestAttributes = {
+        _command: `get_x`,
+        _invoke: `invoke-${i}`,
+        _service: `x`,
+        url: `http://localhost:8081/x/${i}`,
+        headers: { 'Content-Type': 'application/json' },
+        method: 'GET',
+      }
+
+      optionAttributes.push(option)
+    }
+
+    const data = await requestHttp(optionAttributes, detailLog, summaryLog)
+
+    for (let i = 0; i < data.length; i++) {
+      summaryLog.addSuccessBlock('x', 'get_x', data[i].Status.toString().padEnd(5, '0'), 'success')
     }
 
     if (user['2faEnable']) {
@@ -102,7 +135,17 @@ route.post(
       const exp = config.get('cacheTemporaryTokenExpiresInSeconds')
 
       const r = await cache.set(key, user.id, { EX: exp })
-      console.log('redis set', r)
+
+      const data = {
+        tempToken,
+        email: user.email,
+        redis: r,
+      }
+
+      detailLog.addOutputRequest('client', 'get_login', 'invoke-1', '', data, 'HTTP', 'POST')
+      detailLog.end()
+      summaryLog.addSuccessBlock('client', 'get_login', '2000', 'success')
+      summaryLog.end('200', '')
 
       res.json({ token: tempToken })
       return
@@ -122,15 +165,17 @@ route.post(
       expiresIn: refreshTokenExpiresIn,
     })
 
-    const key_refreshToken = `refreshToken:${refreshToken}`
-
-    // convert 7day to seconds
-    await cache.set(key_refreshToken, 'ok', { EX: 604800 })
-
-    res.status(200).json({
+    const result = {
       access_token: accessToken,
       refresh_token: refreshToken,
-    })
+    }
+
+    detailLog.addOutputRequest('client', 'get_login', 'invoke-1', '', result, 'HTTP', 'POST')
+    detailLog.end()
+    summaryLog.addSuccessBlock('client', 'cmd-3', '2000', 'success')
+    summaryLog.end('200', '')
+
+    res.status(200).json(result)
   },
   { body: loginSchema }
 )
@@ -148,7 +193,7 @@ route.post(
       return
     }
 
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, +userId))
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, userId))
 
     if (users.length !== 1) {
       res.status(401).json({ message: 'Email or password is invalid' })
@@ -213,7 +258,7 @@ route.get(
       return
     }
 
-    const users = await db.select().from(usersTable).where(eq(usersTable.id, +id))
+    const users = await db.select().from(usersTable).where(eq(usersTable.id, id))
 
     if (users.length !== 1) {
       res.status(401).json({ message: 'Email or password is invalid' })
@@ -225,7 +270,7 @@ route.get(
     const secret = authenticator.generateSecret()
     const uri = authenticator.keyuri(user.email, 'manfra.io', secret)
 
-    const result = await db.update(usersTable).set({ '2faSecret': secret, '2faEnable': true }).where(eq(usersTable.id, +id))
+    const result = await db.update(usersTable).set({ '2faSecret': secret, '2faEnable': true }).where(eq(usersTable.id, id))
     console.log(result)
     const qrCode = await QRCode.toBuffer(uri)
 
@@ -247,7 +292,7 @@ route.post(
         return
       }
 
-      const users = await db.select().from(usersTable).where(eq(usersTable.id, +id))
+      const users = await db.select().from(usersTable).where(eq(usersTable.id, id))
       if (users.length !== 1) {
         res.status(401).json({ message: 'User not found' })
         return
@@ -267,7 +312,7 @@ route.post(
         return
       }
 
-      await db.update(usersTable).set({ '2faEnable': true }).where(eq(usersTable.id, +id))
+      await db.update(usersTable).set({ '2faEnable': true }).where(eq(usersTable.id, id))
 
       res.status(200).json({ message: 'TOTP validated successfully' })
     } catch (error) {
