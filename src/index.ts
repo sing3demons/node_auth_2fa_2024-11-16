@@ -12,7 +12,7 @@ import crypto from 'crypto'
 import QRCode from 'qrcode'
 import AppServer, { AppRouter, Type } from './lib/route'
 import { DetailLog, SummaryLog } from './lib/logger'
-import { RequestAttributes, requestHttp } from './lib/http-service'
+import { HttpService, RequestAttributes } from './lib/http-service'
 
 const route = new AppRouter()
 
@@ -82,8 +82,10 @@ route.post(
 route.post(
   '/api/auth/login',
   async ({ body: { email, password }, res, req }) => {
-    const detailLog = req.detailLog.setIdentity('identity-1').setScenario('scenario-1').setCommand('get_login')
-    const summaryLog = new SummaryLog('session-1', 'init-invoke', 'scenario-1', 'identity-1')
+    const detailLog = req.detailLog.New({ scenario: 'scenario-1' })
+    const summaryLog = req.summaryLog.New({ scenario: 'scenario-1' })
+
+    detailLog.addInputRequest('client', 'get_login', 'invoke-1', req)
     summaryLog.addSuccessBlock('client', 'get_login', '2000', 'success')
 
     const sql = db.select().from(usersTable).where(eq(usersTable.email, email)).toSQL()
@@ -123,7 +125,7 @@ route.post(
       optionAttributes.push(option)
     }
 
-    const data = await requestHttp(optionAttributes, detailLog, summaryLog)
+    const data = await HttpService.requestHttp(optionAttributes, detailLog, summaryLog)
 
     for (let i = 0; i < data.length; i++) {
       summaryLog.addSuccessBlock('x', 'get_x', data[i].Status.toString().padEnd(5, '0'), 'success')

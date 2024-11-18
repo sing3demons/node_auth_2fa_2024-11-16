@@ -6,9 +6,12 @@ type TMap = {
   [key: string]: string
 }
 
+const http_method = ['GET', 'POST', 'PUT', 'DELETE'] as const
+type HTTP_METHOD = (typeof http_method)[number]
+
 type RequestAttributes = {
   headers: TMap
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method: HTTP_METHOD
   params?: TMap
   query?: TMap
   body?: TMap
@@ -32,6 +35,18 @@ type ApiResponse = {
 
 type RA = RequestAttributes | RequestAttributes[]
 type ReturnPromise<T> = T extends RequestAttributes[] ? ApiResponse[] : ApiResponse
+type ApiResponsePromises = Promise<AxiosResponse<ApiResponse, ApiResponse>>[]
+
+class HttpService {
+  public static async requestHttp<T extends RA>(
+    optionAttributes: T,
+    detailLog?: DetailLog,
+    summaryLog?: SummaryLog,
+    defaultStatusSuccess: boolean = true
+  ): Promise<ReturnPromise<T>> {
+    return requestHttp(optionAttributes, detailLog, summaryLog, defaultStatusSuccess)
+  }
+}
 
 async function requestHttp<T extends RA>(
   optionAttributes: T,
@@ -39,8 +54,8 @@ async function requestHttp<T extends RA>(
   summaryLog?: SummaryLog,
   defaultStatusSuccess: boolean = true
 ): Promise<ReturnPromise<T>> {
-  const requests: Promise<AxiosResponse<ApiResponse, ApiResponse>>[] = []
-  const requestAttributes = []
+  const requests: ApiResponsePromises = []
+  const requestAttributes: RequestAttributes[] = []
   const statusSuccess = new Set<number>()
   if (defaultStatusSuccess) {
     statusSuccess.add(200).add(201)
@@ -58,9 +73,7 @@ async function requestHttp<T extends RA>(
 
       return axiosRetry.exponentialDelay(retryCount)
     },
-    retryCondition: (error) => {
-      return axiosRetry.isNetworkOrIdempotentRequestError(error) || error.response?.status === 429
-    },
+    retryCondition: (error) => axiosRetry.isNetworkOrIdempotentRequestError(error) || error.response?.status === 429,
   })
 
   if (Array.isArray(optionAttributes)) {
@@ -151,21 +164,24 @@ async function requestHttp<T extends RA>(
   }
 
   requestAttributes.forEach(processOptionAttr)
+  requestAttributes.length = 0
 
   flushDetailLog(ins, detailLog)
 
   if (requests.length === 1) {
     const body = await requests[0]
+    requests.length = 0
     const response: ApiResponse = {
       Body: body.data,
       Header: body.headers,
       Status: body.status,
       StatusText: body.statusText,
     }
-    return response as T extends RequestAttributes[] ? ApiResponse[] : ApiResponse
+    return response as ReturnPromise<T>
   }
 
   const result = await Promise.allSettled(requests)
+  requests.length = 0
   const response: ApiResponse[] = []
   result.forEach((res) => {
     if (res.status === 'fulfilled') {
@@ -192,7 +208,7 @@ async function requestHttp<T extends RA>(
   })
   result.length = 0
   statusSuccess.clear()
-  return response as T extends RequestAttributes[] ? ApiResponse[] : ApiResponse
+  return response as ReturnPromise<T>
 }
 
 class InstanceHTTPReq {
@@ -235,4 +251,4 @@ function replaceUrlParam(url: string, params?: TMap) {
   return subURL.join('/')
 }
 
-export { requestHttp, RequestAttributes }
+export { HttpService, RequestAttributes }

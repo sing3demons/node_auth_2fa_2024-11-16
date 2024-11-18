@@ -151,12 +151,15 @@ type IDetailLog = {
   Session: string
   InitInvoke: string
   Scenario: string | null
-  Identity: string | null
   InputTimeStamp: string | null
   Input: InputOutput[]
   OutputTimeStamp: string | null
   Output: InputOutput[]
   ProcessingTime: string | null
+}
+
+type LoggingContext = {
+  scenario: string
 }
 
 class DetailLog {
@@ -167,26 +170,6 @@ class DetailLog {
   public detailLog: IDetailLog
   private conf: LogConfig = confLog
 
-  public setSession(session: string) {
-    this.detailLog.Session = session
-    return this
-  }
-
-  public setInitInvoke(initInvoke: string) {
-    this.detailLog.InitInvoke = initInvoke
-    return this
-  }
-
-  public setScenario(scenario: string) {
-    this.detailLog.Scenario = scenario
-    return this
-  }
-
-  public setCommand(cmd: string) {
-    this.detailLog.Input[0].Event = this.detailLog.Input[0].Event.replace(/[^.]+$/, cmd)
-    return this
-  }
-
   constructor(session: string, initInvoke?: string, scenario?: string, identity?: string) {
     this.detailLog = {
       LogType: 'Detail',
@@ -196,7 +179,6 @@ class DetailLog {
       Session: session,
       InitInvoke: initInvoke || this.conf.projectName + `_${dateFormat(new Date(), 'yyyymmddHHMMss')}`,
       Scenario: scenario || '',
-      Identity: identity || '',
       InputTimeStamp: null,
       Input: [],
       OutputTimeStamp: null,
@@ -205,8 +187,9 @@ class DetailLog {
     }
   }
 
-  setIdentity(identity: string) {
-    this.detailLog.Identity = identity
+  public New({ scenario }: LoggingContext) {
+    this.detailLog.Input.length = 0
+    this.detailLog.Scenario = scenario
     return this
   }
 
@@ -215,7 +198,6 @@ class DetailLog {
   }
 
   addInputRequest(node: string, cmd: string, invoke: string, req: Request): void {
-    const rawData = JSON.stringify(req.body)
     const data = {
       headers: req.headers,
       params: req.params,
@@ -226,7 +208,7 @@ class DetailLog {
       invoke = this.detailLog.InitInvoke
     }
 
-    this.addInput(node, cmd, invoke, 'req', rawData, data, undefined, req.protocol, req.method)
+    this.addInput(node, cmd, invoke, 'req', '', data, undefined, req.protocol, req.method)
   }
 
   addInputResponseError(node: string, cmd: string, invoke: string, rawData?: string): void {
@@ -286,12 +268,14 @@ class DetailLog {
     data: LogData,
     protocol?: string,
     protocolMethod?: string
-  ): void {
+  ) {
     this.addOutput(node, cmd, invoke, 'req', rawData, data, protocol, protocolMethod)
+    return this
   }
 
-  addOutputResponse(node: string, cmd: string, invoke: string, rawData: string, data: LogData): void {
+  addOutputResponse(node: string, cmd: string, invoke: string, rawData: string, data: LogData) {
     this.addOutput(node, cmd, invoke, 'res', rawData, data)
+    return this
   }
 
   addOutputRequestRetry(
@@ -409,7 +393,6 @@ class SummaryLog {
   private session: string
   private initInvoke: string
   private cmd: string
-  private identity: string
   private blockDetail: BlockDetail[] = []
   private optionalField: OptionalFields | undefined
 
@@ -420,11 +403,16 @@ class SummaryLog {
     summary: confLog.summary,
   }
 
-  constructor(session: string, initInvoke?: string, cmd?: string, identity?: string) {
+  constructor(session: string, initInvoke?: string, cmd?: string) {
     this.session = session
     this.initInvoke = initInvoke || this.conf.projectName + `_${dateFormat(new Date(), 'yyyymmddHHMMss')}`
     this.cmd = cmd || ''
-    this.identity = identity || ''
+  }
+
+  New({ scenario }: LoggingContext) {
+    this.cmd = scenario
+    this.blockDetail.length = 0
+    return this
   }
 
   addField(fieldName: string, fieldValue: any): void {
@@ -448,10 +436,6 @@ class SummaryLog {
     } else {
       this._process(responseResult, responseDesc, transactionResult, transactionDesc)
     }
-  }
-
-  setIdentity(identity: string): void {
-    this.identity = identity
   }
 
   isEnd(): boolean {
@@ -528,7 +512,6 @@ class SummaryLog {
       Session: this.session,
       InitInvoke: this.initInvoke,
       Scenario: this.cmd,
-      Identity: this.identity,
       ResponseResult: responseResult,
       ResponseDesc: responseDesc,
       TransactionResult: transactionResult,

@@ -5,6 +5,8 @@ import { v7 as uuid } from 'uuid'
 import http from 'http'
 import { Socket } from 'net'
 import { DetailLog, SummaryLog } from './logger'
+import dateFormat from 'dateformat'
+import randomstring from 'randomstring'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -178,6 +180,7 @@ class BaseRoute {
 
   private handleError(error: unknown, req: Request, res: Response, next: NextFunction) {
     const detailLog = req.detailLog
+    const summaryLog = req.summaryLog
     if (error instanceof Object) {
       const err = error as { path: string; message: string }
       if (err.path && err.message) {
@@ -185,10 +188,15 @@ class BaseRoute {
           name: err?.path.startsWith('/') ? err.path.replace('/', '') : err.path || 'unknown',
           message: err?.message || 'Unknown error',
         }
-
+        if (!summaryLog.isEnd()) {
+          summaryLog.addErrorBlock('client', detailLog.detailLog.Input[0].Event.split('.')[1], '400', 'Validation failed')
+          summaryLog.addField('x', '400')
+          summaryLog.end('500', 'error')
+        }
         if (detailLog.startTimeDate) {
-          detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(details))
-          detailLog.end()
+          detailLog
+            .addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', JSON.stringify(details), details)
+            .end()
         }
 
         res.status(400).json({
@@ -199,16 +207,24 @@ class BaseRoute {
       } else {
         const code = error as unknown as { statusCode?: number; status?: number }
         if (detailLog.startTimeDate) {
-          detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(code))
-          detailLog.end()
+          detailLog.addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', '', code).end()
         }
+        summaryLog.addField('result_code', code.statusCode || code.status || 500)
+        summaryLog.end('500', 'error')
         res.status(code.statusCode || code.status || 500).json(error)
       }
     } else if (error instanceof Error) {
       if (detailLog.startTimeDate) {
-        detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(error))
-        detailLog.end()
+        detailLog
+          .addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', '', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          })
+          .end()
       }
+      // summaryLog.addField('result_code', error.message)
+      summaryLog.end('500', 'error')
       // Handle general errors
       res.status(500).json({
         success: false,
@@ -217,9 +233,12 @@ class BaseRoute {
       })
     } else {
       if (detailLog.startTimeDate) {
-        detailLog.addInputResponseError('client', detailLog.detailLog.Input[0].Event.split('.')[1], JSON.stringify(error))
-        detailLog.end()
+        detailLog
+          .addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', '', { error: String(error) })
+          .end()
       }
+      summaryLog.addField('result_code', String(error))
+      summaryLog.end('500', 'error')
       // Handle other errors
       res.status(500).json({
         success: false,
@@ -229,14 +248,16 @@ class BaseRoute {
     }
 
     // Proceed to the next middleware
-    return next(error)
+    // return next(error)
   }
   protected createHandler(handler: RouteHandler<any>, schemas?: SchemaT) {
     return async (req: Request, res: Response, next: NextFunction) => {
       try {
-        req.detailLog = new DetailLog(req.session || '')
-        req.summaryLog = new SummaryLog(req.session || '')
-        const cmd = `${req.method}_${req.originalUrl.replace('/', '_')}`.toLowerCase()
+        const session = req.session
+        const invoke = req.invoke
+        req.detailLog = new DetailLog(session, invoke)
+        req.summaryLog = new SummaryLog(session, invoke)
+        const cmd = `${req.method}${req.originalUrl}`.replace(/\//g, '_').replace('__', '_').toLowerCase()
 
         req.detailLog.addInputRequest('client', cmd, '', req)
         this.validateRequest(req, schemas)
@@ -319,6 +340,15 @@ function globalErrorHandler(error: unknown, _request: Request, res: Response, _n
 
 const transaction = 'x-session-id'
 
+function generateXTid(nodeName: string = '') {
+  var now = new Date()
+  let date = dateFormat(now, 'yymmdd')
+  let xtid = nodeName.substring(0, 5) + '-' + date
+  let remaininglength = 22 - xtid.length
+  xtid += randomstring.generate(remaininglength)
+  return xtid
+}
+
 class AppServer implements IServer {
   private readonly app: Express = express()
   constructor(before?: () => void) {
@@ -328,7 +358,15 @@ class AppServer implements IServer {
     this.app.use((req: Request, _res: Response, next: NextFunction) => {
       if (!req.headers[transaction]) {
         req.headers[transaction] = uuid()
+        req.session = req.headers[transaction]
       }
+
+      if (req.headers['x-tid']) {
+        req.invoke = req.headers['x-tid'] as string
+      } else {
+        req.invoke = generateXTid('clnt')
+      }
+
       next()
     })
     this.app.use(express.json())
