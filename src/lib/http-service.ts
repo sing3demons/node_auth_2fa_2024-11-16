@@ -6,11 +6,6 @@ type TMap = {
   [key: string]: string
 }
 
-const ERROR_TBL = {
-  TIMEOUT: 'TIMEOUT',
-  CONNECTION_ERROR: 'CONNECTION_ERROR',
-}
-
 type RequestAttributes = {
   headers: TMap
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -26,21 +21,6 @@ type RequestAttributes = {
   url: string
   auth?: AxiosBasicCredentials
   statusSuccess?: number[]
-}
-
-function replaceUrlParam(url: string, params?: TMap) {
-  let subURL = url.split('/')
-  if (!params) return url
-  for (var i = 0; i < subURL.length; i++) {
-    if (subURL[i] !== '' && subURL[i].startsWith(':')) {
-      let replaceValue = params[subURL[i].substring(1)]
-      if (replaceValue) {
-        subURL[i] = replaceValue
-        continue
-      }
-    }
-  }
-  return subURL.join('/')
 }
 
 type ApiResponse = {
@@ -240,14 +220,19 @@ function flushDetailLog(ins: InstanceHTTPReq, detailLog?: DetailLog) {
   }
 }
 
-export { requestHttp, RequestAttributes }
-
-async function requestHttp2(optionAttributes: RequestAttributes | RequestAttributes[]): Promise<{} | []> {
-  // Check if optionAttributes is an array
-  if (Array.isArray(optionAttributes)) {
-    return [] // Return an empty array
+function replaceUrlParam(url: string, params?: TMap) {
+  let subURL = url.split('/')
+  if (!params) return url
+  for (var i = 0; i < subURL.length; i++) {
+    if (subURL[i] !== '' && subURL[i].startsWith(':')) {
+      let replaceValue = params[subURL[i].substring(1)]
+      if (replaceValue) {
+        subURL[i] = replaceValue
+        continue
+      }
+    }
   }
-
-  // Otherwise, return an empty object
-  return {}
+  return subURL.join('/')
 }
+
+export { requestHttp, RequestAttributes }
