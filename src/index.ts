@@ -10,9 +10,9 @@ import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-import AppServer, { AppRouter, Type } from './route.custom'
-import { DetailLog, SummaryLog } from './logger/logger'
-import { RequestAttributes, requestHttp } from './http-service'
+import AppServer, { AppRouter, Type } from './lib/route'
+import { DetailLog, SummaryLog } from './lib/logger'
+import { RequestAttributes, requestHttp } from './lib/http-service'
 
 const route = new AppRouter()
 

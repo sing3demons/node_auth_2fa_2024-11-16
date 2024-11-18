@@ -4,7 +4,7 @@ import express, { type Request, type Response, type NextFunction, type RequestHa
 import { v7 as uuid } from 'uuid'
 import http from 'http'
 import { Socket } from 'net'
-import { DetailLog, SummaryLog } from './logger/logger'
+import { DetailLog, SummaryLog } from './logger'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -236,8 +236,9 @@ class BaseRoute {
       try {
         req.detailLog = new DetailLog(req.session || '')
         req.summaryLog = new SummaryLog(req.session || '')
+        const cmd = `${req.method}_${req.originalUrl.replace('/', '_')}`.toLowerCase()
 
-        req.detailLog.addInputRequest('client', req.method, '', req)
+        req.detailLog.addInputRequest('client', cmd, '', req)
         this.validateRequest(req, schemas)
         this.preRequest(handler)(req, res, next)
       } catch (error) {

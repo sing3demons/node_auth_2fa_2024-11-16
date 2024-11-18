@@ -1,6 +1,6 @@
 import axios, { AxiosBasicCredentials, AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import axiosRetry from 'axios-retry'
-import { DetailLog, SummaryLog } from './logger/logger'
+import { DetailLog, SummaryLog } from './logger'
 
 type TMap = {
   [key: string]: string
@@ -50,12 +50,15 @@ type ApiResponse = {
   StatusText?: string
 }
 
-async function requestHttp<T extends RequestAttributes | RequestAttributes[]>(
+type RA = RequestAttributes | RequestAttributes[]
+type ReturnPromise<T> = T extends RequestAttributes[] ? ApiResponse[] : ApiResponse
+
+async function requestHttp<T extends RA>(
   optionAttributes: T,
   detailLog?: DetailLog,
   summaryLog?: SummaryLog,
   defaultStatusSuccess: boolean = true
-): Promise<T extends RequestAttributes[] ? ApiResponse[] : ApiResponse> {
+): Promise<ReturnPromise<T>> {
   const requests: Promise<AxiosResponse<ApiResponse, ApiResponse>>[] = []
   const requestAttributes = []
   const statusSuccess = new Set<number>()

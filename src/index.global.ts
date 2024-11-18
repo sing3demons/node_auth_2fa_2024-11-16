@@ -1,5 +1,5 @@
 import * as express from 'express'
-import { DetailLog, SummaryLog } from './logger/logger'
+import { DetailLog, SummaryLog } from './lib/logger'
 
 declare global {
   namespace Express {
