@@ -7,6 +7,7 @@ import { Socket } from 'net'
 import { DetailLog, SummaryLog } from './logger'
 import dateFormat from 'dateformat'
 import randomstring from 'randomstring'
+import NODE_NAME from './constants/modeName'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -189,13 +190,19 @@ class BaseRoute {
           message: err?.message || 'Unknown error',
         }
         if (!summaryLog.isEnd()) {
-          summaryLog.addErrorBlock('client', detailLog.detailLog.Input[0].Event.split('.')[1], '400', 'Validation failed')
+          summaryLog.addErrorBlock(NODE_NAME.CLIENT, detailLog.detailLog.Input[0].Event.split('.')[1], '400', 'Validation failed')
           summaryLog.addField('x', '400')
           summaryLog.end('500', 'error')
         }
         if (detailLog.startTimeDate) {
           detailLog
-            .addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', JSON.stringify(details), details)
+            .addOutputResponse(
+              NODE_NAME.CLIENT,
+              detailLog.detailLog.Input[0].Event.split('.')[1],
+              '',
+              JSON.stringify(details),
+              details
+            )
             .end()
         }
 
@@ -207,7 +214,7 @@ class BaseRoute {
       } else {
         const code = error as unknown as { statusCode?: number; status?: number }
         if (detailLog.startTimeDate) {
-          detailLog.addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', '', code).end()
+          detailLog.addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0].Event.split('.')[1], '', '', code).end()
         }
         summaryLog.addField('result_code', code.statusCode || code.status || 500)
         summaryLog.end('500', 'error')
@@ -216,7 +223,7 @@ class BaseRoute {
     } else if (error instanceof Error) {
       if (detailLog.startTimeDate) {
         detailLog
-          .addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', '', {
+          .addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0].Event.split('.')[1], '', '', {
             name: error.name,
             message: error.message,
             stack: error.stack,
@@ -259,7 +266,7 @@ class BaseRoute {
         req.summaryLog = new SummaryLog(session, invoke)
         const cmd = `${req.method}${req.originalUrl}`.replace(/\//g, '_').replace('__', '_').toLowerCase()
 
-        req.detailLog.addInputRequest('client', cmd, '', req)
+        req.detailLog.addInputRequest(NODE_NAME.CLIENT, cmd, '', req)
         this.validateRequest(req, schemas)
         this.preRequest(handler)(req, res, next)
       } catch (error) {
@@ -340,7 +347,7 @@ function globalErrorHandler(error: unknown, _request: Request, res: Response, _n
 
 const transaction = 'x-session-id'
 
-function generateXTid(nodeName: string = '') {
+export function generateXTid(nodeName: string = '') {
   var now = new Date()
   let date = dateFormat(now, 'yymmdd')
   let xtid = nodeName.substring(0, 5) + '-' + date

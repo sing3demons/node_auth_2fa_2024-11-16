@@ -158,10 +158,6 @@ type IDetailLog = {
   ProcessingTime: string | null
 }
 
-type LoggingContext = {
-  scenario: string
-}
-
 class DetailLog {
   public startTimeDate: Date | null = null
   private inputTime: Date | null = null
@@ -187,7 +183,7 @@ class DetailLog {
     }
   }
 
-  public New({ scenario }: LoggingContext) {
+  public New(scenario: string) {
     this.detailLog.Input.length = 0
     this.detailLog.Scenario = scenario
     return this
@@ -409,7 +405,7 @@ class SummaryLog {
     this.cmd = cmd || ''
   }
 
-  New({ scenario }: LoggingContext) {
+  New(scenario: string) {
     this.cmd = scenario
     this.blockDetail.length = 0
     return this

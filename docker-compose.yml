@@ -14,7 +14,13 @@ services:
     restart: always
     ports:
       - 6379:6379
-
+  mongo:
+      image: mongo:5
+      container_name: mongodb
+      # volumes:
+      #   - ./data/mongo:/data/db
+      ports:
+        - 27017:27017
   adminer:
     image: adminer
     restart: always

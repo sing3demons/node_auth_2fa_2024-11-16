@@ -10,9 +10,11 @@ import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-import AppServer, { AppRouter, Type } from './lib/route'
+import AppServer, { AppRouter, generateXTid, Type } from './lib/route'
 import { DetailLog, SummaryLog } from './lib/logger'
 import { HttpService, RequestAttributes } from './lib/http-service'
+import CMD_NAME from './lib/constants/commandName'
+import NODE_NAME from './lib/constants/modeName'
 
 const route = new AppRouter()
 
@@ -82,11 +84,12 @@ route.post(
 route.post(
   '/api/auth/login',
   async ({ body: { email, password }, res, req }) => {
-    const detailLog = req.detailLog.New({ scenario: 'scenario-1' })
-    const summaryLog = req.summaryLog.New({ scenario: 'scenario-1' })
+    const detailLog = req.detailLog.New(CMD_NAME.LOGIN)
+    const summaryLog = req.summaryLog.New(CMD_NAME.LOGIN)
+    const initInvoke = generateXTid('auth')
 
-    detailLog.addInputRequest('client', 'get_login', 'invoke-1', req)
-    summaryLog.addSuccessBlock('client', 'get_login', '2000', 'success')
+    detailLog.addInputRequest(NODE_NAME.CLIENT, CMD_NAME.LOGIN, initInvoke, req)
+    summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
 
     const sql = db.select().from(usersTable).where(eq(usersTable.email, email)).toSQL()
     detailLog.addOutputRequest('postgres', 'cmd-2', 'invoke-1', '', sql)
@@ -112,11 +115,12 @@ route.post(
     summaryLog.addSuccessBlock('postgres', 'cmd-2', '2000', 'success')
 
     const optionAttributes: RequestAttributes[] = []
+    const _invoke = generateXTid('x')
     for (let i = 1; i <= 30; i++) {
       const option: RequestAttributes = {
         _command: `get_x`,
-        _invoke: `invoke-${i}`,
-        _service: `x`,
+        _invoke,
+        _service: `go-service`,
         url: `http://localhost:8081/x/${i}`,
         headers: { 'Content-Type': 'application/json' },
         method: 'GET',
@@ -144,9 +148,9 @@ route.post(
         redis: r,
       }
 
-      detailLog.addOutputRequest('client', 'get_login', 'invoke-1', '', data, 'HTTP', 'POST')
+      detailLog.addOutputRequest(NODE_NAME.CLIENT, CMD_NAME.LOGIN, initInvoke, '', data, 'HTTP', 'POST')
       detailLog.end()
-      summaryLog.addSuccessBlock('client', 'get_login', '2000', 'success')
+      summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
       summaryLog.end('200', '')
 
       res.json({ token: tempToken })
