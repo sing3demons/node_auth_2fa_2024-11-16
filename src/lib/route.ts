@@ -5,9 +5,9 @@ import { v7 as uuid } from 'uuid'
 import http from 'http'
 import { Socket } from 'net'
 import { DetailLog, SummaryLog } from './logger'
-import dateFormat from 'dateformat'
-import randomstring from 'randomstring'
+
 import NODE_NAME from './constants/modeName'
+import { generateXTid } from './utils'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -347,22 +347,13 @@ function globalErrorHandler(error: unknown, _request: Request, res: Response, _n
 
 const transaction = 'x-session-id'
 
-export function generateXTid(nodeName: string = '') {
-  var now = new Date()
-  let date = dateFormat(now, 'yymmdd')
-  let xtid = nodeName.substring(0, 5) + '-' + date
-  let remaininglength = 22 - xtid.length
-  xtid += randomstring.generate(remaininglength)
-  return xtid
-}
-
 class AppServer implements IServer {
   private readonly app: Express = express()
   constructor(before?: () => void) {
     if (before) {
       before()
     }
-    this.app.use((req: Request, _res: Response, next: NextFunction) => {
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
       if (!req.headers[transaction]) {
         req.headers[transaction] = uuid()
         req.session = req.headers[transaction]
@@ -375,6 +366,34 @@ class AppServer implements IServer {
       }
 
       next()
+
+      const originalSend = res.send
+      res.send = (body: any) => {
+        if (req.detailLog.startTimeDate) {
+          req.detailLog
+            .addOutputResponse(NODE_NAME.CLIENT, req.detailLog.detailLog.Input[0].Event.split('.')[1], '', '', body)
+            .end()
+          req.detailLog = null as unknown as DetailLog
+        }
+        if (!req.summaryLog.isEnd()) {
+          const result_desc =
+            res.statusCode === 200 || res.statusCode === 201
+              ? ''
+              : res.statusCode === 404
+              ? 'not_found'
+              : res.statusCode === 400
+              ? 'bad_request'
+              : res.statusCode === 401
+              ? 'unauthorized'
+              : res.statusCode === 403
+              ? 'forbidden'
+              : res.statusCode === 500
+              ? 'internal_server_error'
+              : 'unknown'
+          req.summaryLog.end(res.statusCode.toString(), result_desc)
+        }
+        return originalSend.call(res, body)
+      }
     })
     this.app.use(express.json())
     this.app.use(express.urlencoded({ extended: true }))
@@ -439,5 +458,5 @@ class AppServer implements IServer {
   }
 }
 
-export { AppRouter, Type }
+export { AppRouter, Type, generateXTid }
 export default AppServer

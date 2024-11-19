@@ -3,6 +3,7 @@ const NODE_NAME = {
   POSTGRES: 'postgres',
   REDIS: 'redis',
   MONGO: 'mongo',
+  GO_SERVER: 'go_server',
 }
 
 

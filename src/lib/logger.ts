@@ -1,68 +1,12 @@
 import * as os from 'os'
 import dateFormat from 'dateformat'
-import { createStream, RotatingFileStream } from 'rotating-file-stream'
+import { RotatingFileStream } from 'rotating-file-stream'
 import fs from 'fs'
 import { Request } from 'express'
+import { confLog, createStreams, LogConfig } from './utils'
 
 const endOfLine = os.EOL
 const dateFMT = 'yyyy-mm-dd HH:MM:ss'
-
-interface ConfigLog {
-  format: 'json'
-  time: number
-  size?: number
-  path: string
-  console: boolean
-  file: boolean
-  rawData?: boolean
-}
-interface LogConfig {
-  summary: ConfigLog
-  projectName: string
-  namespace: string
-  detail: ConfigLog
-}
-
-const confLog: LogConfig = {
-  detail: {
-    rawData: true,
-    path: './logs/detail/',
-    format: 'json',
-    time: 15,
-    console: false,
-    file: true,
-  },
-  projectName: 'my-project',
-  namespace: 'default',
-  summary: {
-    format: 'json',
-    time: 15,
-    path: './logs/summary/',
-    console: false,
-    file: true,
-  },
-}
-
-if (process.env.CONFIG_LOG) {
-  const configLog = JSON.parse(process.env.CONFIG_LOG)
-
-  const updateConfig = (target: ConfigLog, source: Partial<ConfigLog>) => {
-    Object.assign(target, source)
-  }
-
-  if (configLog.projectName) {
-    confLog.projectName = configLog.projectName
-  }
-  if (configLog.namespace) {
-    confLog.namespace = configLog.namespace
-  }
-  if (configLog.summary) {
-    updateConfig(confLog.summary, configLog.summary)
-  }
-  if (configLog.detail) {
-    updateConfig(confLog.detail, configLog.detail)
-  }
-}
 
 const streamTask: {
   dtl: RotatingFileStream | null
@@ -88,39 +32,6 @@ if (confLog.summary.file) {
   streamTask.smr = createStreams('smr')
 }
 
-function getFileName(type: 'smr' | 'dtl', date?: Date | undefined, index?: number | undefined): string {
-  const hostname = os.hostname()
-  const projectName = confLog.projectName
-  const pmId = process.pid
-
-  const formattedDate = date ? `_${dateFormat(date, dateFMT)}` : `_${dateFormat(new Date(), dateFMT)}`
-  const formattedIndex = index ? `.${index}` : ''
-  if (type === 'smr') {
-    return `/${hostname}_${projectName}${formattedDate}${formattedIndex}.${pmId}.sum.log`
-  }
-
-  return `/${hostname}_${projectName}${formattedDate}${formattedIndex}.${pmId}.detail.log`
-}
-
-function createStreams(type: 'smr' | 'dtl') {
-  const stream = createStream(getFileName(type), {
-    size: '10M', // rotate every 10 MegaBytes written
-    interval: '1d', // rotate daily
-    compress: 'gzip', // compress rotated files
-    path: type === 'smr' ? confLog.summary.path : confLog.detail.path,
-  })
-
-  stream.on('error', (err) => {
-    console.error(err)
-  })
-
-  stream.on('warning', (err) => {
-    console.error(err)
-  })
-
-  return stream
-}
-
 function write(type: 'smr' | 'dtl', log: string) {
   if (typeof log !== 'string') {
     streamTask[type]?.write(JSON.stringify(log) + endOfLine)
@@ -128,7 +39,6 @@ function write(type: 'smr' | 'dtl', log: string) {
     streamTask[type]?.write(log + endOfLine)
   }
 }
-
 interface LogData {
   [key: string]: any
 }

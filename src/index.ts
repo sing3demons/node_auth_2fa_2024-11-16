@@ -11,7 +11,6 @@ import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
 import AppServer, { AppRouter, generateXTid, Type } from './lib/route'
-import { DetailLog, SummaryLog } from './lib/logger'
 import { HttpService, RequestAttributes } from './lib/http-service'
 import CMD_NAME from './lib/constants/commandName'
 import NODE_NAME from './lib/constants/modeName'
@@ -54,8 +53,18 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
 
 route.post(
   '/api/auth/register',
-  async ({ body: { name, email, password }, res }) => {
+  async ({ body: { name, email, password }, res, req }) => {
+    const detailLog = req.detailLog.New(CMD_NAME.REGISTER)
+    const summaryLog = req.summaryLog.New(CMD_NAME.REGISTER)
+    const initInvoke = generateXTid('auth')
+
+    detailLog.addInputRequest(NODE_NAME.CLIENT, CMD_NAME.REGISTER, initInvoke, req)
+
+    const sql = db.select().from(usersTable).where(eq(usersTable.email, email)).toSQL()
     const checkUser = await db.select().from(usersTable).where(eq(usersTable.email, email))
+    detailLog.addOutputResponse(NODE_NAME.POSTGRES, CMD_NAME.GET_USER, initInvoke, '', sql).end()
+    summaryLog.addSuccessBlock(NODE_NAME.POSTGRES, CMD_NAME.GET_USER, '2000', 'success')
+    detailLog.addInputResponse(NODE_NAME.POSTGRES, CMD_NAME.GET_USER, initInvoke, '', checkUser)
 
     if (checkUser.length > 0) {
       console.log(checkUser)
@@ -91,15 +100,17 @@ route.post(
     detailLog.addInputRequest(NODE_NAME.CLIENT, CMD_NAME.LOGIN, initInvoke, req)
     summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
 
+    let cmd = 'select_user',
+      invoke = generateXTid('pg')
     const sql = db.select().from(usersTable).where(eq(usersTable.email, email)).toSQL()
-    detailLog.addOutputRequest('postgres', 'cmd-2', 'invoke-1', '', sql)
+    detailLog.addOutputRequest(NODE_NAME.POSTGRES, cmd, invoke, '', sql)
     detailLog.end()
     const users = await db.select().from(usersTable).where(eq(usersTable.email, email))
 
-    detailLog.addInputResponse('postgres', 'cmd-2', 'invoke-1', '', users)
+    detailLog.addInputResponse(NODE_NAME.POSTGRES, cmd, invoke, '', users)
 
     if (users.length !== 1) {
-      summaryLog.addErrorBlock('postgres', 'cmd-2', '40100', 'Email or password is invalid')
+      summaryLog.addErrorBlock(NODE_NAME.POSTGRES, cmd, '40100', 'Email or password is invalid')
       res.status(401).json({ message: 'Email or password is invalid' })
       return
     }
@@ -107,20 +118,21 @@ route.post(
     const user = users[0]
     const isPasswordValid = await bcrypt.compare(password, user.password)
     if (!isPasswordValid) {
-      summaryLog.addErrorBlock('postgres', 'cmd-2', '40100', 'Email or password is invalid')
+      summaryLog.addErrorBlock('postgres', cmd, '40100', 'Email or password is invalid')
       res.status(401).json({ message: 'Email or password is invalid' })
       return
     }
 
-    summaryLog.addSuccessBlock('postgres', 'cmd-2', '2000', 'success')
+    summaryLog.addSuccessBlock('postgres', cmd, '2000', 'success')
 
     const optionAttributes: RequestAttributes[] = []
-    const _invoke = generateXTid('x')
+    invoke = generateXTid('x')
+    cmd = 'get_x'
     for (let i = 1; i <= 30; i++) {
       const option: RequestAttributes = {
-        _command: `get_x`,
-        _invoke,
-        _service: `go-service`,
+        _command: cmd,
+        _invoke: invoke,
+        _service: NODE_NAME.GO_SERVER,
         url: `http://localhost:8081/x/${i}`,
         headers: { 'Content-Type': 'application/json' },
         method: 'GET',
@@ -132,7 +144,7 @@ route.post(
     const data = await HttpService.requestHttp(optionAttributes, detailLog, summaryLog)
 
     for (let i = 0; i < data.length; i++) {
-      summaryLog.addSuccessBlock('x', 'get_x', data[i].Status.toString().padEnd(5, '0'), 'success')
+      summaryLog.addSuccessBlock(NODE_NAME.GO_SERVER, cmd, data[i].Status.toString().padEnd(5, '0'), 'success')
     }
 
     if (user['2faEnable']) {
@@ -148,10 +160,7 @@ route.post(
         redis: r,
       }
 
-      detailLog.addOutputRequest(NODE_NAME.CLIENT, CMD_NAME.LOGIN, initInvoke, '', data, 'HTTP', 'POST')
-      detailLog.end()
       summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
-      summaryLog.end('200', '')
 
       res.json({ token: tempToken })
       return
@@ -176,10 +185,7 @@ route.post(
       refresh_token: refreshToken,
     }
 
-    detailLog.addOutputRequest('client', 'get_login', 'invoke-1', '', result, 'HTTP', 'POST')
-    detailLog.end()
-    summaryLog.addSuccessBlock('client', 'cmd-3', '2000', 'success')
-    summaryLog.end('200', '')
+    summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
 
     res.status(200).json(result)
   },
