@@ -1,6 +1,6 @@
 import axios, { AxiosBasicCredentials, AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import axiosRetry from 'axios-retry'
-import { DetailLog, SummaryLog } from './logger'
+import { DetailLog, SummaryLog } from './logger.js'
 
 type TMap = {
   [key: string]: string
@@ -172,10 +172,10 @@ async function requestHttp<T extends RA>(
     const body = await requests[0]
     requests.length = 0
     const response: ApiResponse = {
-      Body: body.data,
-      Header: body.headers,
-      Status: body.status,
-      StatusText: body.statusText,
+      Body: body?.data,
+      Header: body?.headers,
+      Status: body?.status || 500,
+      StatusText: body?.statusText,
     }
     return response as ReturnPromise<T>
   }
@@ -240,8 +240,9 @@ function replaceUrlParam(url: string, params?: TMap) {
   let subURL = url.split('/')
   if (!params) return url
   for (var i = 0; i < subURL.length; i++) {
-    if (subURL[i] !== '' && subURL[i].startsWith(':')) {
-      let replaceValue = params[subURL[i].substring(1)]
+    if (subURL[i] !== '' && subURL[i]?.startsWith(':')) {
+      const sub = subURL[i]?.substring(1)
+      let replaceValue = sub ? params[sub] : undefined
       if (replaceValue) {
         subURL[i] = replaceValue
         continue

@@ -4,10 +4,9 @@ import express, { type Request, type Response, type NextFunction, type RequestHa
 import { v7 as uuid } from 'uuid'
 import http from 'http'
 import { Socket } from 'net'
-import { DetailLog, SummaryLog } from './logger'
-
-import NODE_NAME from './constants/modeName'
-import { generateXTid } from './utils'
+import { DetailLog, SummaryLog } from './logger.js'
+import NODE_NAME from './constants/modeName.js'
+import { generateXTid } from './utils/index.js'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]
@@ -190,7 +189,7 @@ class BaseRoute {
           message: err?.message || 'Unknown error',
         }
         if (!summaryLog.isEnd()) {
-          summaryLog.addErrorBlock(NODE_NAME.CLIENT, detailLog.detailLog.Input[0].Event.split('.')[1], '400', 'Validation failed')
+          summaryLog.addErrorBlock(NODE_NAME.CLIENT, detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '400', 'Validation failed')
           summaryLog.addField('x', '400')
           summaryLog.end('500', 'error')
         }
@@ -198,7 +197,7 @@ class BaseRoute {
           detailLog
             .addOutputResponse(
               NODE_NAME.CLIENT,
-              detailLog.detailLog.Input[0].Event.split('.')[1],
+              detailLog.detailLog.Input[0]!.Event.split('.')[1]!,
               '',
               JSON.stringify(details),
               details
@@ -214,7 +213,7 @@ class BaseRoute {
       } else {
         const code = error as unknown as { statusCode?: number; status?: number }
         if (detailLog.startTimeDate) {
-          detailLog.addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0].Event.split('.')[1], '', '', code).end()
+          detailLog.addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', code).end()
         }
         summaryLog.addField('result_code', code.statusCode || code.status || 500)
         summaryLog.end('500', 'error')
@@ -223,7 +222,7 @@ class BaseRoute {
     } else if (error instanceof Error) {
       if (detailLog.startTimeDate) {
         detailLog
-          .addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0].Event.split('.')[1], '', '', {
+          .addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', {
             name: error.name,
             message: error.message,
             stack: error.stack,
@@ -241,7 +240,7 @@ class BaseRoute {
     } else {
       if (detailLog.startTimeDate) {
         detailLog
-          .addOutputResponse('client', detailLog.detailLog.Input[0].Event.split('.')[1], '', '', { error: String(error) })
+          .addOutputResponse('client', detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', { error: String(error) })
           .end()
       }
       summaryLog.addField('result_code', String(error))
@@ -371,7 +370,7 @@ class AppServer implements IServer {
       res.send = (body: any) => {
         if (req.detailLog.startTimeDate) {
           req.detailLog
-            .addOutputResponse(NODE_NAME.CLIENT, req.detailLog.detailLog.Input[0].Event.split('.')[1], '', '', body)
+            .addOutputResponse(NODE_NAME.CLIENT, req.detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', body)
             .end()
           req.detailLog = null as unknown as DetailLog
         }

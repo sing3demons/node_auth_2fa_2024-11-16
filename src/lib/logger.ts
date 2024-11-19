@@ -1,9 +1,10 @@
 import * as os from 'os'
-import dateFormat from 'dateformat'
+import * as dateFormat from 'dateformat'
 import { RotatingFileStream } from 'rotating-file-stream'
 import fs from 'fs'
 import { Request } from 'express'
-import { confLog, createStreams, LogConfig } from './utils'
+import { confLog, createStreams, LogConfig } from './utils/index.js'
+import dayjs from 'dayjs'
 
 const endOfLine = os.EOL
 const dateFMT = 'yyyy-mm-dd HH:MM:ss'
@@ -83,7 +84,7 @@ class DetailLog {
       AppName: this.conf.projectName,
       Instance: process.pid,
       Session: session,
-      InitInvoke: initInvoke || this.conf.projectName + `_${dateFormat(new Date(), 'yyyymmddHHMMss')}`,
+      InitInvoke: initInvoke || this.conf.projectName + `_${dayjs(new Date(), 'yyyymmddHHMMss')}`,
       Scenario: scenario || '',
       InputTimeStamp: null,
       Input: [],
@@ -147,7 +148,7 @@ class DetailLog {
       delete this.timeCounter[invoke]
     } else if (type.startsWith('res')) {
       if (this.timeCounter[invoke]) {
-        resTime = this.inputTime!.getTime() - this.timeCounter[invoke].getTime()
+        resTime = this.inputTime!.getTime() - this.timeCounter[invoke]!.getTime()
         resTime = resTime + ' ms'
         delete this.timeCounter[invoke]
       }
@@ -229,10 +230,10 @@ class DetailLog {
 
     const usingDateFMT = 'yyyy-mm-dd HH:MM:ss'
     this.detailLog.ProcessingTime = new Date().getTime() - this.startTimeDate.getTime() + ' ms'
-    this.detailLog.InputTimeStamp = this.inputTime && dateFormat(this.inputTime, usingDateFMT)
+    this.detailLog.InputTimeStamp = this.inputTime && dayjs(this.inputTime, usingDateFMT).toString()
 
     if (this.outputTime) {
-      this.detailLog.OutputTimeStamp = dateFormat(this.outputTime, usingDateFMT)
+      this.detailLog.OutputTimeStamp = dayjs(this.outputTime, usingDateFMT).toString()
     } else {
       this.detailLog.Output.length = 0
       this.detailLog.OutputTimeStamp = null
@@ -311,7 +312,7 @@ class SummaryLog {
 
   constructor(session: string, initInvoke?: string, cmd?: string) {
     this.session = session
-    this.initInvoke = initInvoke || this.conf.projectName + `_${dateFormat(new Date(), 'yyyymmddHHMMss')}`
+    this.initInvoke = initInvoke || this.conf.projectName + `_${dayjs(new Date(), 'yyyymmddHHMMss')}`
     this.cmd = cmd || ''
   }
 
@@ -360,9 +361,12 @@ class SummaryLog {
     var found = null
 
     for (var i = 0; i < store.length; i++) {
-      if (store[i].node === node && store[i].cmd === cmd) {
+      if (store[i] !== undefined && store[i]?.node === node && store[i]?.cmd === cmd) {
         found = store[i]
-        store[i].count++
+        if (found?.count) {
+          found.count++
+        }
+
         break
       }
     }
@@ -395,23 +399,25 @@ class SummaryLog {
     const seq: any[] = []
     for (let j = 0; j < this.blockDetail.length; j++) {
       const i = this.blockDetail[j]
-      const r = []
-      for (var k = 0; k < i.result.length; k++) {
-        r.push({
-          Result: i.result[k].resultCode,
-          Desc: i.result[k].resultDesc,
+      if (i) {
+        const r = []
+        for (var k = 0; k < i.result.length; k++) {
+          r.push({
+            Result: i.result[k]?.resultCode || 'null',
+            Desc: i.result[k]?.resultDesc,
+          })
+        }
+        seq.push({
+          Node: i.node,
+          Cmd: i.cmd,
+          Result: r,
         })
       }
-      seq.push({
-        Node: i.node,
-        Cmd: i.cmd,
-        Result: r,
-      })
     }
 
     const o = {
       LogType: 'Summary',
-      InputTimeStamp: dateFormat(this.requestTime!, dateFMT),
+      InputTimeStamp: dayjs(this.requestTime!, dateFMT),
       Host: os.hostname(),
       AppName: this.conf.projectName,
       Instance: process.env.pm_id,
@@ -423,7 +429,7 @@ class SummaryLog {
       TransactionResult: transactionResult,
       TransactionDesc: transactionDesc,
       Sequences: seq,
-      EndProcessTimeStamp: dateFormat(endTime, dateFMT),
+      EndProcessTimeStamp: dayjs(endTime, dateFMT),
       ProcessTime: `${endTime.getTime() - this.requestTime!.getTime()} ms`,
       CustomDesc: this.optionalField ? { ...this.optionalField } : undefined,
     }

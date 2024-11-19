@@ -1,19 +1,19 @@
 import 'dotenv/config'
 import { eq } from 'drizzle-orm'
-import { usersTable } from './db/schema'
+import { usersTable } from './db/schema.js'
 import { NextFunction, Request, Response } from 'express'
-import config from './config'
-import { db } from './db'
+import config from './config.js'
+import { db } from './db/index.js'
 import bcrypt from 'bcrypt'
-import { cache, connRedis } from './db/redis'
+import { cache, connRedis } from './db/redis.js'
 import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-import AppServer, { AppRouter, generateXTid, Type } from './lib/route'
-import { HttpService, RequestAttributes } from './lib/http-service'
-import CMD_NAME from './lib/constants/commandName'
-import NODE_NAME from './lib/constants/modeName'
+import AppServer, { AppRouter, generateXTid, Type } from './lib/route.js'
+import { HttpService, RequestAttributes } from './lib/http-service.js'
+import CMD_NAME from './lib/constants/commandName.js'
+import NODE_NAME from './lib/constants/modeName.js'
 
 const route = new AppRouter()
 
@@ -116,7 +116,7 @@ route.post(
     }
 
     const user = users[0]
-    const isPasswordValid = await bcrypt.compare(password, user.password)
+    const isPasswordValid = await bcrypt.compare(password, user!.password)
     if (!isPasswordValid) {
       summaryLog.addErrorBlock('postgres', cmd, '40100', 'Email or password is invalid')
       res.status(401).json({ message: 'Email or password is invalid' })
@@ -144,10 +144,10 @@ route.post(
     const data = await HttpService.requestHttp(optionAttributes, detailLog, summaryLog)
 
     for (let i = 0; i < data.length; i++) {
-      summaryLog.addSuccessBlock(NODE_NAME.GO_SERVER, cmd, data[i].Status.toString().padEnd(5, '0'), 'success')
+      summaryLog.addSuccessBlock(NODE_NAME.GO_SERVER, cmd, data[i]!.Status.toString().padEnd(5, '0'), 'success')
     }
 
-    if (user['2faEnable']) {
+    if (user && user['2faEnable']) {
       const tempToken = crypto.randomUUID()
       const key = `${config.get('cacheTemporaryTokenPrefix')}${tempToken}`
       const exp = config.get('cacheTemporaryTokenExpiresInSeconds')
@@ -171,8 +171,8 @@ route.post(
     const refreshTokenSecret = config.get('refreshTokenSecret')
     const refreshTokenExpiresIn = config.get('refreshTokenExpiresIn')
     const payload = {
-      id: user.id,
-      email: user.email,
+      id: user!.id,
+      email: user!.email,
     }
 
     const accessToken = jwt.sign(payload, accessTokenSecret, { expiresIn })
@@ -213,12 +213,12 @@ route.post(
     }
 
     const user = users[0]
-    if (!user['2faEnable']) {
+    if (!user || !user['2faEnable']) {
       res.status(401).json({ message: '2FA is not enabled for this user' })
       return
     }
 
-    const secret = user['2faSecret']
+    const secret = user['2faSecret'] || undefined
     if (!secret) {
       res.status(401).json({ message: '2FA secret is not set for this user' })
       return
@@ -277,7 +277,7 @@ route.get(
       return
     }
 
-    const user = users[0]
+    const user = users[0]!
 
     const secret = authenticator.generateSecret()
     const uri = authenticator.keyuri(user.email, 'manfra.io', secret)
@@ -309,9 +309,9 @@ route.post(
         res.status(401).json({ message: 'User not found' })
         return
       }
-      const user = users[0]
+      const user = users[0]!
 
-      const secret = user['2faSecret']
+      const secret = user['2faSecret'] || undefined
       if (!secret) {
         res.status(401).json({ message: '2FA secret is not set for this user' })
         return

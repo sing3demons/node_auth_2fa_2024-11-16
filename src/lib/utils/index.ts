@@ -1,8 +1,7 @@
-import dateFormat from 'dateformat'
 import randomString from 'randomstring'
 import { createStream } from 'rotating-file-stream'
 import * as os from 'os'
-const endOfLine = os.EOL
+import dayjs from 'dayjs'
 const dateFMT = 'yyyy-mm-dd HH:MM:ss'
 
 interface ConfigLog {
@@ -65,7 +64,7 @@ if (process.env.CONFIG_LOG) {
 
 function generateXTid(nodeName: string = '') {
   const now = new Date()
-  const date = dateFormat(now, 'yymmdd')
+  const date = dayjs(now, 'yymmdd')
   let xTid = nodeName.substring(0, 5) + '-' + date
   const remainingLength = 22 - xTid.length
   xTid += randomString.generate(remainingLength)
@@ -77,7 +76,7 @@ function getFileName(type: 'smr' | 'dtl', date?: Date | undefined, index?: numbe
   const projectName = confLog.projectName
   const pmId = process.pid
 
-  const formattedDate = date ? `_${dateFormat(date, dateFMT)}` : `_${dateFormat(new Date(), dateFMT)}`
+  const formattedDate = date ? `_${dayjs(date, dateFMT)}` : `_${dayjs(new Date(), dateFMT)}`
   const formattedIndex = index ? `.${index}` : ''
   if (type === 'smr') {
     return `/${hostname}_${projectName}${formattedDate}${formattedIndex}.${pmId}.sum.log`
@@ -105,4 +104,4 @@ function createStreams(type: 'smr' | 'dtl') {
   return stream
 }
 
-export { dateFormat, randomString, generateXTid, getFileName, createStreams, confLog, LogConfig }
+export {  randomString, generateXTid, getFileName, createStreams, confLog, LogConfig }
