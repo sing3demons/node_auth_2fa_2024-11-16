@@ -59,6 +59,7 @@ route.post(
     const initInvoke = generateXTid('auth')
 
     detailLog.addInputRequest(NODE_NAME.CLIENT, CMD_NAME.REGISTER, initInvoke, req)
+    summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.REGISTER, '2000', 'success')
 
     const sql = db.select().from(usersTable).where(eq(usersTable.email, email)).toSQL()
     const checkUser = await db.select().from(usersTable).where(eq(usersTable.email, email))
@@ -67,9 +68,8 @@ route.post(
     detailLog.addInputResponse(NODE_NAME.POSTGRES, CMD_NAME.GET_USER, initInvoke, '', checkUser)
 
     if (checkUser.length > 0) {
-      console.log(checkUser)
-      res.status(409).json({ message: 'Email already exists' })
-      return
+      res.status(409)
+      return { message: 'Email already exists' }
     }
     const hashedPassword = await bcrypt.hash(password, 10)
 

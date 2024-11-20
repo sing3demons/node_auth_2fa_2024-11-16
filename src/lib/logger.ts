@@ -298,6 +298,10 @@ class DetailLog {
     this.detailLog.Output.push(output)
   }
 
+  public isEnd(): boolean {
+    return this.startTimeDate === null
+  }
+
   end(): void {
     if (!this.startTimeDate) throw new Error('detailLog call "end()", twice')
 

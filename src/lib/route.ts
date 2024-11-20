@@ -168,8 +168,15 @@ class BaseRoute {
           res: res as Response,
           next,
         }
-        const result = await handler(ctx)
+        const result = (await handler(ctx)) as { status: number | string; statusCode: number | string; code: number | string }
         if (result) {
+          if (result?.status) {
+            res.status(+result.status)
+          } else if (result?.statusCode) {
+            res.status(+result.statusCode)
+          } else if (result?.code) {
+            res.status(+result.code)
+          }
           res.send(result)
         }
       } catch (e) {
@@ -189,8 +196,13 @@ class BaseRoute {
           message: err?.message || 'Unknown error',
         }
         if (!summaryLog.isEnd()) {
-          summaryLog.addErrorBlock(NODE_NAME.CLIENT, detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '400', 'Validation failed')
-          summaryLog.addField('x', '400')
+          summaryLog.addErrorBlock(
+            NODE_NAME.CLIENT,
+            detailLog.detailLog.Input[0]!.Event.split('.')[1]!,
+            '400',
+            'Validation failed'
+          )
+
           summaryLog.end('500', 'error')
         }
         if (detailLog.startTimeDate) {
@@ -368,13 +380,13 @@ class AppServer implements IServer {
 
       const originalSend = res.send
       res.send = (body: any) => {
-        if (req.detailLog.startTimeDate) {
+        if (!req?.detailLog?.isEnd()) {
           req.detailLog
-            .addOutputResponse(NODE_NAME.CLIENT, req.detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', body)
+            ?.addOutputResponse(NODE_NAME.CLIENT, req.detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', body)
             .end()
           req.detailLog = null as unknown as DetailLog
         }
-        if (!req.summaryLog.isEnd()) {
+        if (!req?.summaryLog?.isEnd()) {
           const result_desc =
             res.statusCode === 200 || res.statusCode === 201
               ? ''
@@ -386,10 +398,23 @@ class AppServer implements IServer {
               ? 'unauthorized'
               : res.statusCode === 403
               ? 'forbidden'
+              : res.statusCode === 405
+              ? 'method_not_allowed'
+              : res.statusCode === 409
+              ? 'conflict'
+              : res.statusCode === 422
+              ? 'unprocessable_entity'
+              : res.statusCode === 429
+              ? 'too_many_requests'
               : res.statusCode === 500
               ? 'internal_server_error'
               : 'unknown'
-          req.summaryLog.end(res.statusCode.toString(), result_desc)
+
+          if (!!result_desc) {
+            req.summaryLog.addField('message', result_desc)
+          }
+
+          req?.summaryLog.end(res.statusCode.toString(), result_desc)
         }
         return originalSend.call(res, body)
       }
