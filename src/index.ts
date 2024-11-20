@@ -134,7 +134,7 @@ route.post(
         _invoke: invoke,
         _service: NODE_NAME.GO_SERVER,
         url: `http://localhost:8081/x/${i}`,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'api-key': 'a3d15ec3-e682-4570-942a-6ca65c2c0485' },
         method: 'GET',
       }
 
@@ -184,8 +184,6 @@ route.post(
       access_token: accessToken,
       refresh_token: refreshToken,
     }
-
-    summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
 
     res.status(200).json(result)
   },

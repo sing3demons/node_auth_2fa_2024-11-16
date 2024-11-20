@@ -1,16 +1,10 @@
 import { customAlphabet } from 'nanoid'
 
-export default class NanoIdService {
-  private readonly alphanum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-  private readonly len = 11
+const alphanum = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
-  randomNanoId(): string {
-    const nanoid = customAlphabet(this.alphanum, this.len)
-    return nanoid()
-  }
-
-  randomNanoIdWithLen(len: number): string {
-    const nanoid = customAlphabet(this.alphanum, len)
-    return nanoid()
-  }
+const genNanoId = (size: number) => {
+  const nanoid = customAlphabet(alphanum, size)
+  return nanoid()
 }
+
+export { genNanoId }

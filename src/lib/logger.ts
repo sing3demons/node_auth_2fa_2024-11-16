@@ -1,5 +1,4 @@
 import * as os from 'os'
-import * as dateFormat from 'dateformat'
 import { RotatingFileStream } from 'rotating-file-stream'
 import fs from 'fs'
 import { Request } from 'express'
@@ -7,15 +6,8 @@ import { confLog, createStreams, LogConfig } from './utils/index.js'
 import dayjs from 'dayjs'
 
 const endOfLine = os.EOL
-const dateFMT = 'yyyy-mm-dd HH:MM:ss'
 
-const streamTask: {
-  dtl: RotatingFileStream | null
-  smr: RotatingFileStream | null
-} = {
-  dtl: null,
-  smr: null,
-}
+const streamTask: { dtl: RotatingFileStream | null; smr: RotatingFileStream | null } = { dtl: null, smr: null }
 
 if (confLog.detail.file) {
   if (!fs.existsSync(confLog.detail.path)) {
@@ -69,6 +61,11 @@ type IDetailLog = {
   ProcessingTime: string | null
 }
 
+interface MaskingConfig {
+  highlight?: string[]
+  mark?: string[]
+}
+
 class DetailLog {
   public startTimeDate: Date | null = null
   private inputTime: Date | null = null
@@ -84,7 +81,7 @@ class DetailLog {
       AppName: this.conf.projectName,
       Instance: process.pid,
       Session: session,
-      InitInvoke: initInvoke || this.conf.projectName + `_${dayjs(new Date(), 'yyyymmddHHMMss')}`,
+      InitInvoke: initInvoke || this.conf.projectName + `_${dayjs().format('yyyymmddHHMMss')}`,
       Scenario: scenario || '',
       InputTimeStamp: null,
       Input: [],
@@ -102,6 +99,66 @@ class DetailLog {
 
   isRawDataEnabled(): boolean {
     return this.conf.detail.rawData === true
+  }
+  private maskingConfig: MaskingConfig = {
+    highlight: ['email', 'phone'],
+    mark: ['password', 'pin', 'otp', 'token', 'secret', 'api-key'],
+  }
+
+  private maskSensitiveData<T>(body: T): T {
+    if (!body) {
+      return body
+    } else if (typeof body === 'string') {
+      try {
+        const parsedBody = JSON.parse(body)
+        const data = JSON.stringify(this.maskSensitiveData(parsedBody))
+        return data as T
+      } catch (error) {
+        return body
+      }
+    } else if (typeof body === 'object') {
+      const data = JSON.parse(JSON.stringify(body)) // Clone the object to avoid modifying the original data
+      const maskedData: any = Array.isArray(data) ? [] : {}
+
+      for (const key in data) {
+        if (data.hasOwnProperty(key)) {
+          // Check if the key is in 'mark' (full mask) or 'highlight' (partial mask)
+          if (this.maskingConfig?.mark?.includes(key)) {
+            maskedData[key] = '******' // Fully mask fields in 'mark'
+          } else if (this.maskingConfig?.highlight?.includes(key)) {
+            maskedData[key] = this.applyPartialMask(data[key]) // Partially mask fields in 'highlight'
+          } else if (typeof data[key] === 'object') {
+            // Recursively mask nested objects
+            maskedData[key] = this.maskSensitiveData(data[key])
+          } else {
+            maskedData[key] = data[key]
+          }
+        }
+      }
+
+      return maskedData
+    } else {
+      return body
+    }
+  }
+  private applyPartialMask(value: string): string {
+    const rex = new RegExp(/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$/)
+    if (rex.test(value)) {
+      let [first, second] = value.split('@')
+      if (!first) {
+        return ''
+      }
+      if (first.length > 2) {
+        const mask = first.substring(3, first.length)
+        const notMask = first.substring(0, 3)
+        first = notMask + '*'.repeat(mask.length)
+      } else {
+        first = first.replace(first.substring(1, first.length), '*'.repeat(first.length - 1))
+      }
+      return `${first}@${second}`
+    }
+
+    return value.length > 2 ? value.substring(0, 2) + '*'.repeat(value.length - 2) : value
   }
 
   addInputRequest(node: string, cmd: string, invoke: string, req: Request): void {
@@ -141,6 +198,14 @@ class DetailLog {
 
     if (!this.startTimeDate) {
       this.startTimeDate = this.inputTime
+    }
+
+    if (rawData) {
+      rawData = this.maskSensitiveData(rawData)
+    }
+
+    if (data) {
+      data = this.maskSensitiveData(data)
     }
 
     if (typeof resTime === 'number') {
@@ -213,6 +278,14 @@ class DetailLog {
       this.timeCounter[invoke] = this.outputTime
     }
 
+    if (rawData) {
+      rawData = this.maskSensitiveData(rawData)
+    }
+
+    if (data) {
+      data = this.maskSensitiveData(data)
+    }
+
     const output: InputOutput = {
       Invoke: invoke,
       Event: `${node}.${cmd}`,
@@ -230,10 +303,10 @@ class DetailLog {
 
     const usingDateFMT = 'yyyy-mm-dd HH:MM:ss'
     this.detailLog.ProcessingTime = new Date().getTime() - this.startTimeDate.getTime() + ' ms'
-    this.detailLog.InputTimeStamp = this.inputTime && dayjs(this.inputTime, usingDateFMT).toString()
+    this.detailLog.InputTimeStamp = this.inputTime && dayjs(this.inputTime).format()
 
     if (this.outputTime) {
-      this.detailLog.OutputTimeStamp = dayjs(this.outputTime, usingDateFMT).toString()
+      this.detailLog.OutputTimeStamp = dayjs(this.outputTime).format()
     } else {
       this.detailLog.Output.length = 0
       this.detailLog.OutputTimeStamp = null
@@ -312,7 +385,7 @@ class SummaryLog {
 
   constructor(session: string, initInvoke?: string, cmd?: string) {
     this.session = session
-    this.initInvoke = initInvoke || this.conf.projectName + `_${dayjs(new Date(), 'yyyymmddHHMMss')}`
+    this.initInvoke = initInvoke || this.conf.projectName + `_${dayjs(new Date()).format('yyyymmddHHMMss')}`
     this.cmd = cmd || ''
   }
 
@@ -417,7 +490,7 @@ class SummaryLog {
 
     const o = {
       LogType: 'Summary',
-      InputTimeStamp: dayjs(this.requestTime!, dateFMT),
+      InputTimeStamp: dayjs(this.requestTime!).format(),
       Host: os.hostname(),
       AppName: this.conf.projectName,
       Instance: process.env.pm_id,
@@ -429,7 +502,7 @@ class SummaryLog {
       TransactionResult: transactionResult,
       TransactionDesc: transactionDesc,
       Sequences: seq,
-      EndProcessTimeStamp: dayjs(endTime, dateFMT),
+      EndProcessTimeStamp: dayjs(endTime).format(),
       ProcessTime: `${endTime.getTime() - this.requestTime!.getTime()} ms`,
       CustomDesc: this.optionalField ? { ...this.optionalField } : undefined,
     }

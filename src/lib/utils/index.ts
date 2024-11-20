@@ -3,6 +3,9 @@ import { createStream } from 'rotating-file-stream'
 import * as os from 'os'
 import dayjs from 'dayjs'
 const dateFMT = 'yyyy-mm-dd HH:MM:ss'
+const { default: packageJson } = await import('../../../package.json', {
+  assert: { type: 'json' },
+})
 
 interface ConfigLog {
   format: 'json'
@@ -22,6 +25,8 @@ interface LogConfig {
 }
 
 const confLog: LogConfig = {
+  projectName: packageJson.name,
+  namespace: 'default',
   detail: {
     rawData: true,
     path: './logs/detail/',
@@ -30,8 +35,6 @@ const confLog: LogConfig = {
     console: false,
     file: true,
   },
-  projectName: 'my-project',
-  namespace: 'default',
   summary: {
     format: 'json',
     time: 15,
@@ -75,14 +78,25 @@ function getFileName(type: 'smr' | 'dtl', date?: Date | undefined, index?: numbe
   const hostname = os.hostname()
   const projectName = confLog.projectName
   const pmId = process.pid
-
-  const formattedDate = date ? `_${dayjs(date, dateFMT)}` : `_${dayjs(new Date(), dateFMT)}`
-  const formattedIndex = index ? `.${index}` : ''
-  if (type === 'smr') {
-    return `/${hostname}_${projectName}${formattedDate}${formattedIndex}.${pmId}.sum.log`
+  if (!date) {
+    date = new Date()
   }
 
-  return `/${hostname}_${projectName}${formattedDate}${formattedIndex}.${pmId}.detail.log`
+  const formattedDate = ()=>{
+    const year = date.getFullYear()
+    const month = `0${date.getMonth() + 1}`.slice(-2)
+    const day = `0${date.getDate()}`.slice(-2)
+    const hour = `0${date.getHours()}`.slice(-2)
+    const minute = `0${date.getMinutes()}`.slice(-2)
+    const second = `0${date.getSeconds()}`.slice(-2)
+    return `${year}${month}${day}${hour}${minute}${second}`
+  }
+  const formattedIndex = index ? `.${index}` : ''
+  if (type === 'smr') {
+    return `/${hostname}_${projectName}_${formattedDate()}${formattedIndex}.${pmId}.sum.log`
+  }
+
+  return `/${hostname}_${projectName}_${formattedDate()}${formattedIndex}.${pmId}.detail.log`
 }
 
 function createStreams(type: 'smr' | 'dtl') {
@@ -104,4 +118,4 @@ function createStreams(type: 'smr' | 'dtl') {
   return stream
 }
 
-export {  randomString, generateXTid, getFileName, createStreams, confLog, LogConfig }
+export { randomString, generateXTid, getFileName, createStreams, confLog, LogConfig }
