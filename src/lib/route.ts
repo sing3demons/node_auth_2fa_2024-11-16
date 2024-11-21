@@ -71,6 +71,12 @@ type SchemaT = {
   cmd?: string
 }
 
+type StatusDetails = {
+  status: number | string
+  statusCode: number | string
+  code: number | string
+}
+
 type THandler<T extends string, B extends TS, Q extends TS> = RouteHandler<T, TParam<T>, Static<B>, Static<Q>>
 
 class BaseRoute {
@@ -170,7 +176,8 @@ class BaseRoute {
           res: res as Response,
           next,
         }
-        const result = (await handler(ctx)) as { status: number | string; statusCode: number | string; code: number | string }
+
+        const result = (await handler(ctx)) as StatusDetails
         if (result) {
           if (result?.status) {
             res.status(+result.status)
@@ -187,7 +194,7 @@ class BaseRoute {
     }
   }
 
-  private handleError(error: unknown, req: Request, res: Response, next: NextFunction) {
+  private handleError(error: unknown, req: Request, res: Response) {
     const detailLog = req.detailLog
     const summaryLog = req.summaryLog
     const cmd = detailLog.detailLog?.Input[0]?.Event?.split('.')[1] || ''
@@ -243,9 +250,7 @@ class BaseRoute {
       })
     } else {
       if (detailLog.startTimeDate) {
-        detailLog
-          .addOutputResponse('client', detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', { error: String(error) })
-          .end()
+        detailLog.addOutputResponse(NODE_NAME.CLIENT, cmd, '', '', { error: String(error) }).end()
       }
       summaryLog.addField('result_code', String(error))
       summaryLog.end('500', 'error')
@@ -273,7 +278,7 @@ class BaseRoute {
         this.validateRequest(req, schemas)
         this.preRequest(handler)(req, res, next)
       } catch (error) {
-        this.handleError(error, req, res, next)
+        this.handleError(error, req, res)
       }
     }
   }
