@@ -60,6 +60,7 @@ type RouteSchema<P, B, Q> = {
   params?: P
   body?: B
   query?: Q
+  cmd?: string
   middleware?: RequestHandler
 }
 
@@ -67,6 +68,7 @@ type SchemaT = {
   params?: TS
   body?: TS
   query?: TS
+  cmd?: string
 }
 
 type THandler<T extends string, B extends TS, Q extends TS> = RouteHandler<T, TParam<T>, Static<B>, Static<Q>>
@@ -188,6 +190,7 @@ class BaseRoute {
   private handleError(error: unknown, req: Request, res: Response, next: NextFunction) {
     const detailLog = req.detailLog
     const summaryLog = req.summaryLog
+    const cmd = detailLog.detailLog?.Input[0]?.Event?.split('.')[1] || ''
     if (error instanceof Object) {
       const err = error as { path: string; message: string }
       if (err.path && err.message) {
@@ -195,37 +198,26 @@ class BaseRoute {
           name: err?.path.startsWith('/') ? err.path.replace('/', '') : err.path || 'unknown',
           message: err?.message || 'Unknown error',
         }
-        if (!summaryLog.isEnd()) {
-          summaryLog.addErrorBlock(
-            NODE_NAME.CLIENT,
-            detailLog.detailLog.Input[0]!.Event.split('.')[1]!,
-            '400',
-            'Validation failed'
-          )
-
-          summaryLog.end('500', 'error')
-        }
-        if (detailLog.startTimeDate) {
-          detailLog
-            .addOutputResponse(
-              NODE_NAME.CLIENT,
-              detailLog.detailLog.Input[0]!.Event.split('.')[1]!,
-              '',
-              JSON.stringify(details),
-              details
-            )
-            .end()
-        }
-
-        res.status(400).json({
+        const status = '400'
+        const response = {
           success: false,
           message: 'Validation failed',
           details,
-        })
+        }
+        if (!summaryLog.isEnd()) {
+          summaryLog.addErrorBlock(NODE_NAME.CLIENT, cmd, status, response.message)
+
+          summaryLog.end(status, 'error')
+        }
+        if (detailLog.startTimeDate) {
+          detailLog.addOutputResponse(NODE_NAME.CLIENT, cmd, '', JSON.stringify(response), response).end()
+        }
+
+        res.status(+status).json(response)
       } else {
         const code = error as unknown as { statusCode?: number; status?: number }
         if (detailLog.startTimeDate) {
-          detailLog.addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', code).end()
+          detailLog.addOutputResponse(NODE_NAME.CLIENT, cmd, '', '', code).end()
         }
         summaryLog.addField('result_code', code.statusCode || code.status || 500)
         summaryLog.end('500', 'error')
@@ -234,7 +226,7 @@ class BaseRoute {
     } else if (error instanceof Error) {
       if (detailLog.startTimeDate) {
         detailLog
-          .addOutputResponse(NODE_NAME.CLIENT, detailLog.detailLog.Input[0]!.Event.split('.')[1]!, '', '', {
+          .addOutputResponse(NODE_NAME.CLIENT, cmd, '', '', {
             name: error.name,
             message: error.message,
             stack: error.stack,
@@ -275,7 +267,7 @@ class BaseRoute {
         const invoke = req.invoke
         req.detailLog = new DetailLog(session, invoke)
         req.summaryLog = new SummaryLog(session, invoke)
-        const cmd = `${req.method}${req.originalUrl}`.replace(/\//g, '_').replace('__', '_').toLowerCase()
+        const cmd = schemas?.cmd || `${req.method}${req.originalUrl}`.replace(/\//g, '_').replace('__', '_').toLowerCase()
 
         req.detailLog.addInputRequest(NODE_NAME.CLIENT, cmd, '', req)
         this.validateRequest(req, schemas)

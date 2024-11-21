@@ -51,6 +51,21 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
   return next()
 }
 
+route.get(
+  '/api/auth/me/:id',
+  async ({ params , res }) => {
+    res.json({
+      id: params.id,
+      name: 'John Doe',
+      email: '',
+    })
+  },
+  {
+    query: registerSchema,
+    cmd: 'get_user',
+  }
+)
+
 route.post(
   '/api/auth/register',
   async ({ body: { name, email, password }, res, req }) => {
