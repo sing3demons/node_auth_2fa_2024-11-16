@@ -32,14 +32,14 @@ const confLog: LogConfig = {
     path: './logs/detail/',
     format: 'json',
     time: 15,
-    console: false,
+    console: true,
     file: true,
   },
   summary: {
     format: 'json',
     time: 15,
     path: './logs/summary/',
-    console: false,
+    console: true,
     file: true,
   },
 }

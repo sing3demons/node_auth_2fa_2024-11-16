@@ -1,6 +1,7 @@
 import axios, { AxiosBasicCredentials, AxiosError, AxiosRequestConfig, AxiosResponse } from 'axios'
 import axiosRetry from 'axios-retry'
-import { DetailLog, SummaryLog } from './logger.js'
+import DetailLog from './logger/detail.js'
+import SummaryLog from './logger/summary.js'
 
 type TMap = {
   [key: string]: string
