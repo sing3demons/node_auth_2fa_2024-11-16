@@ -1,7 +1,7 @@
 import * as os from 'os'
 import { RotatingFileStream } from 'rotating-file-stream'
 import fs from 'fs'
-import { confLog, createStreams, LogConfig } from '../utils/index.js'
+import { confLog, createStreams, LogConfig } from '../utils/index'
 
 const endOfLine = os.EOL
 

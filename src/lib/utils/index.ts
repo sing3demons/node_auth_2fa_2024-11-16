@@ -2,9 +2,10 @@ import randomString from 'randomstring'
 import { createStream } from 'rotating-file-stream'
 import * as os from 'os'
 import dayjs from 'dayjs'
+import config from '../../config'
 
 const packageJson = {
-  name: process.env["SERVICE_NAME"] || 'service-name',
+  name: config.get('app_name'),
 }
 interface ConfigLog {
   format: 'json'

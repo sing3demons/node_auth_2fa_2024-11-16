@@ -1,6 +1,6 @@
 import dayjs from 'dayjs'
-import { confLog, LogConfig } from '../utils/index.js'
-import { writeLogFile } from './logger.js'
+import { confLog, LogConfig } from '../utils/index'
+import { writeLogFile } from './logger'
 import os from 'os'
 
 type SummaryResult = { resultCode: string; resultDesc: string; count?: number }

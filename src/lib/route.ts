@@ -4,10 +4,10 @@ import express, { type Request, type Response, type NextFunction, type RequestHa
 import { v7 as uuid } from 'uuid'
 import http from 'http'
 import { Socket } from 'net'
-import NODE_NAME from './constants/modeName.js'
-import { generateXTid } from './utils/index.js'
-import DetailLog from './logger/detail.js'
-import SummaryLog from './logger/summary.js'
+import NODE_NAME from './constants/modeName'
+import { generateXTid } from './utils/index'
+import DetailLog from './logger/detail'
+import SummaryLog from './logger/summary'
 
 type ExtractParams<T extends string> = T extends `${infer _Start}:${infer Param}/${infer Rest}`
   ? [Param, ...ExtractParams<Rest>]

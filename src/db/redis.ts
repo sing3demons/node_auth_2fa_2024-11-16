@@ -1,5 +1,5 @@
 import { createClient, RedisClientType } from 'redis'
-import config from '../config.js'
+import config from '../config'
 
 const cache: RedisClientType = createClient({
   url: config.get('redis_url'),

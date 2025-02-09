@@ -1,7 +1,7 @@
 // import * as express from 'express'
 
-import DetailLog from './logger/detail.js'
-import SummaryLog from './logger/summary.js'
+import DetailLog from './logger/detail'
+import SummaryLog from './logger/summary'
 
 declare global {
   namespace Express {

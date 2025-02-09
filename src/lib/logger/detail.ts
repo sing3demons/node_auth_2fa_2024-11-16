@@ -1,8 +1,8 @@
 import * as os from 'os'
 import { Request } from 'express'
-import { confLog, LogConfig } from '../utils/index.js'
+import { confLog, LogConfig } from '../utils/index'
 import dayjs from 'dayjs'
-import { writeLogFile } from './logger.js'
+import { writeLogFile } from './logger'
 
 interface LogData {
   [key: string]: any

@@ -3,25 +3,19 @@
  * https://jestjs.io/docs/configuration
  */
 
-import type { Config } from 'jest'
-
-const config: Config = {
-  transform: {
-    '^.+\\.ts$': ['ts-jest', { useESM: true }],
-  },
-  moduleFileExtensions: ['ts', 'js', 'json', 'node'],
+/** @type {import('jest').Config} */
+const config = {
   testEnvironment: 'node',
-  extensionsToTreatAsEsm: ['.ts'], // .js is inferred by package.json "type": "module"
-  globals: {
-    'ts-jest': {
-      useESM: true, // Enable ESM support for ts-jest
-    },
+  transform: {
+    '^.+.tsx?$': ['ts-jest', {}],
   },
-  // Ensure that Jest can resolve ES modules correctly
+  preset: 'ts-jest',
+  coveragePathIgnorePatterns: ['/node_modules/', 'dist'],
+  coverageReporters: ['text', 'lcov', 'clover', 'html'],
+  testPathIgnorePatterns: ['/node_modules/', '/dist/', '/.git/'],
   moduleNameMapper: {
-    '^src/(.*)$': '<rootDir>/src/$1',
-    '^db/(.*)$': '<rootDir>/dist/db/$1', // Ensure this is correct based on your directory structure
-  },
+    '^@/(.*)$': '<rootDir>/src/$1',
+  }
 }
 
-export default config
+module.exports = config
