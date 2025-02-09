@@ -17,7 +17,7 @@ func main() {
 		Format: "${pid} ${locals:requestid} ${status} - ${method} ${path}​\n",
 	}))
 	app.Use(limiter.New(limiter.Config{
-		Max:               200,
+		Max:               20,
 		Expiration:        30 * time.Second,
 		LimiterMiddleware: limiter.SlidingWindow{},
 	}))

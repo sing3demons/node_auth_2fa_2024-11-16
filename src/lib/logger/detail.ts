@@ -46,7 +46,7 @@ export default class DetailLog {
   public detailLog: IDetailLog
   private conf: LogConfig = confLog
 
-  constructor(session: string, initInvoke?: string, scenario?: string, identity?: string) {
+  constructor(session: string, initInvoke?: string, scenario?: string) {
     this.detailLog = {
       LogType: 'Detail',
       Host: os.hostname(),
@@ -277,7 +277,6 @@ export default class DetailLog {
   end(): void {
     if (!this.startTimeDate) throw new Error('detailLog call "end()", twice')
 
-    const usingDateFMT = 'yyyy-mm-dd HH:MM:ss'
     this.detailLog.ProcessingTime = new Date().getTime() - this.startTimeDate.getTime() + ' ms'
     this.detailLog.InputTimeStamp = this.inputTime && dayjs(this.inputTime).format()
 

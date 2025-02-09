@@ -286,7 +286,7 @@ class BaseRoute {
 }
 
 class AppRouter extends BaseRoute {
-  constructor(private readonly instance: Router = Router()) {
+  constructor(public readonly instance: Router = Router()) {
     super()
   }
 
@@ -329,6 +329,7 @@ interface IServer {
   group: (path: string, router: AppRouter, ...middleware: RequestHandler[]) => IServer
   use: (...handler: RequestHandler[]) => IServer
   listen: (port: number | string, close?: () => Promise<void> | void) => void
+  instance: Express
 }
 
 function globalErrorHandler(error: unknown, _request: Request, res: Response, _next: NextFunction) {
@@ -358,6 +359,7 @@ const transaction = 'x-session-id'
 
 class AppServer implements IServer {
   private readonly app: Express = express()
+  public readonly instance: Express
   constructor(before?: () => void) {
     if (before) {
       before()
@@ -419,6 +421,7 @@ class AppServer implements IServer {
     })
     this.app.use(express.json())
     this.app.use(express.urlencoded({ extended: true }))
+    this.instance = this.app
   }
 
   public group(path: string, router: AppRouter, ...middleware: RequestHandler[]) {

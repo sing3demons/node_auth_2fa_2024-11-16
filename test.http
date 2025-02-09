@@ -53,3 +53,6 @@ Authorization : {{accessToken}}
     "totp": "820904",
     "tempToken": "3bb3c53e-67f7-496f-a104-315987bd73eb"
 }
+
+###
+GET http://localhost:3000/auth HTTP/1.1

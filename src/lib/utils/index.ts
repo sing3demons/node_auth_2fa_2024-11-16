@@ -2,11 +2,10 @@ import randomString from 'randomstring'
 import { createStream } from 'rotating-file-stream'
 import * as os from 'os'
 import dayjs from 'dayjs'
-const dateFMT = 'yyyy-mm-dd HH:MM:ss'
-const { default: packageJson } = await import('../../../package.json', {
-  assert: { type: 'json' },
-})
 
+const packageJson = {
+  name: process.env["SERVICE_NAME"] || 'service-name',
+}
 interface ConfigLog {
   format: 'json'
   time: number
@@ -82,7 +81,7 @@ function getFileName(type: 'smr' | 'dtl', date?: Date | undefined, index?: numbe
     date = new Date()
   }
 
-  const formattedDate = ()=>{
+  const formattedDate = () => {
     const year = date.getFullYear()
     const month = `0${date.getMonth() + 1}`.slice(-2)
     const day = `0${date.getDate()}`.slice(-2)

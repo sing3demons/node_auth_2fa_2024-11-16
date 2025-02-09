@@ -1,23 +1,32 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    "lib": ["ESNext"],
     "target": "ES2022",
-    // "lib": ["ES2022"],
-    "allowJs": true,
-    "module": "NodeNext",
+    "outDir": "dist",
+    "removeComments": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "rootDir": "./src",
+    "moduleResolution": "bundler",
+    "allowJs": true,
     "strict": true,
+    // "declaration": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true,
-    "moduleDetection": "force",
-    "moduleResolution": "NodeNext",
-    "outDir": "dist",
+    "alwaysStrict": true,
+    "strictNullChecks": true,
+    "allowUnreachableCode": false,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true,
-    "rootDir": "src",
-    "composite": true,
-    "declaration": true,
-    "sourceMap": true
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "typeRoots": ["src/typings", "./node_modules/@types/"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "drizzle.config.ts"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts"]
 }

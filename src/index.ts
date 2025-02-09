@@ -1,19 +1,19 @@
 import 'dotenv/config'
 import { eq } from 'drizzle-orm'
-import { usersTable } from './db/schema.js'
+import { usersTable } from './db/schema'
 import { NextFunction, Request, Response } from 'express'
-import config from './config.js'
-import { db } from './db/index.js'
-import bcrypt from 'bcrypt'
-import { cache, connRedis } from './db/redis.js'
+import config from './config'
+import { db } from './db/index'
+import bcrypt from 'bcryptjs'
+import { cache, connRedis } from './db/redis'
 import jwt from 'jsonwebtoken'
 import { authenticator } from 'otplib'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
-import AppServer, { AppRouter, generateXTid, Type } from './lib/route.js'
-import { HttpService, RequestAttributes } from './lib/http-service.js'
-import CMD_NAME from './lib/constants/commandName.js'
-import NODE_NAME from './lib/constants/modeName.js'
+import AppServer, { AppRouter, generateXTid, Type } from './lib/route'
+import { HttpService, RequestAttributes } from './lib/http-service'
+import CMD_NAME from './lib/constants/commandName'
+import NODE_NAME from './lib/constants/modeName'
 
 const route = new AppRouter()
 
@@ -53,7 +53,8 @@ function authMiddleware(req: Request, res: Response, next: NextFunction) {
 
 route.get(
   '/api/auth/me/:id',
-  async ({ params , res }) => {
+  async ({ params, res }) => {
+    res.status(200)
     res.json({
       id: params.id,
       name: 'John Doe',
@@ -98,7 +99,7 @@ route.post(
 
     const user = await db.insert(usersTable).values(body)
 
-    res.json(user)
+    return res.json(user)
   },
   {
     body: registerSchema,
@@ -167,13 +168,7 @@ route.post(
       const key = `${config.get('cacheTemporaryTokenPrefix')}${tempToken}`
       const exp = config.get('cacheTemporaryTokenExpiresInSeconds')
 
-      const r = await cache.set(key, user.id, { EX: exp })
-
-      const data = {
-        tempToken,
-        email: user.email,
-        redis: r,
-      }
+      await cache.set(key, user.id, { EX: exp })
 
       summaryLog.addSuccessBlock(NODE_NAME.CLIENT, CMD_NAME.LOGIN, '2000', 'success')
 
@@ -355,5 +350,7 @@ route.post(
     }),
   }
 )
+
+export { route }
 
 app.router(route).listen(config.get('port'))
